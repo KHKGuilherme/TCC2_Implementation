@@ -1,0 +1,36 @@
+# Dependências do projeto.
+#
+# As versões são mínimas, e não fixas. O motivo é compatibilidade
+# com a versão do Python: pyarrow, numpy, pandas e scikit-learn
+# são compiladas, e cada versão delas só traz binário pronto para
+# algumas versões do Python. Fixar uma versão antiga faz o pip
+# tentar compilar do zero, o que falha na maioria das máquinas.
+#
+# Os mínimos abaixo são as primeiras versões com binário pronto
+# para Python 3.14. Em Python 3.10 a 3.13 o pip escolhe versões
+# mais novas que essas e funciona igual.
+#
+# Depois que a instalação funcionar, vale congelar o que foi
+# instalado de fato, para que o trabalho seja reproduzível:
+#
+#     pip freeze > requirements-travado.txt
+
+# ---- Métricas de código: leem o arquivo sem executá-lo ----
+# Python puro, funcionam em qualquer versão.
+radon>=6.0.1
+lizard>=1.17.10
+
+# ---- Métricas de histórico: percorrem o histórico Git ----
+# Python puro.
+PyDriller>=2.6
+
+# ---- Leitura dos parquets do Defectors ----
+pyarrow>=22.0.0
+
+# ---- Dados e modelo ----
+# pandas fica abaixo da versão 3 porque ela muda comportamentos
+# de cópia e de iteração que o código usa.
+numpy>=2.3.2
+pandas>=2.3.3,<3
+scikit-learn>=1.7.2
+joblib>=1.4.2
