@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+clones/
+*.pkl
+*.joblib
+.ipynb_checkpoints/
+.vscode/
+.idea/
