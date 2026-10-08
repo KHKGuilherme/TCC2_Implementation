@@ -2,9 +2,20 @@ __pycache__/
 *.pyc
 .venv/
 venv/
-clones/
-*.pkl
-*.joblib
 .ipynb_checkpoints/
 .vscode/
 .idea/
+
+# Clones temporários que a Fase 2 cria e apaga
+clones/
+
+# Modelo treinado
+*.pkl
+*.joblib
+
+# O Defectors baixado e a amostra extraída dele
+defectors/
+defectors_amostra/
+
+# Dataset e progresso salvo da montagem
+dados/

@@ -6,7 +6,7 @@ Cria uma cópia reduzida e falsa do Defectors, para testar o
 pipeline sem precisar baixar os 2,2 GB do dataset verdadeiro.
 
 Gera parquets com exatamente as mesmas colunas do original
-(datetime, commit, repo, filepath, content, methods, induce_bug),
+(datetime, commit, repo, filepath, content, methods, lines),
 preenchidas a partir de repositórios Git de verdade: commits
 reais, caminhos reais e conteúdo real de cada arquivo naquele
 commit.
@@ -114,9 +114,11 @@ def gerar_linhas(pasta: Path, nome_repo: str, qtd_commits: int,
                 "commit":     hash_commit,
                 "repo":       nome_repo,
                 "filepath":   caminho,
-                "content":    conteudo,
+                # bytes e não str, e a coluna chamada 'lines',
+                # porque é assim que o Defectors publicado vem
+                "content":    conteudo.encode("utf-8"),
                 "methods":    [],
-                "induce_bug": linhas_do_defeito,
+                "lines":      linhas_do_defeito,
             })
 
     return linhas
@@ -157,21 +159,32 @@ def main() -> None:
         print("Nada gerado.")
         return
 
-    destino = config.PASTA_DEFECTORS
+    # Imita a árvore de pastas do Defectors verdadeiro, porque a
+    # montagem seleciona os parquets pelo caminho
+    destino = (config.PASTA_DEFECTORS
+               / config.SUBPASTA_DEFECTORS
+               / config.ESQUEMA_DEFECTORS)
     destino.mkdir(parents=True, exist_ok=True)
 
-    # Dois arquivos, para que o leitor seja exercitado lendo mais
-    # de um parquet e removendo duplicatas entre eles.
+    # Três arquivos com os nomes das partições oficiais, para que o
+    # leitor seja exercitado lendo mais de um parquet, removendo
+    # duplicatas entre eles e preenchendo particao_defectors.
     tabela = pd.DataFrame(todas)
-    meio = len(tabela) // 2
-    tabela.iloc[:meio].to_parquet(
-        destino / "bug_localization_train.parquet", index=False)
-    tabela.iloc[meio:].to_parquet(
-        destino / "bug_localization_test.parquet", index=False)
+    cortes = [len(tabela) * 6 // 10, len(tabela) * 8 // 10]
 
-    defeituosos = sum(1 for linha in todas if linha["induce_bug"])
+    partes = {
+        "train": tabela.iloc[:cortes[0]],
+        "test":  tabela.iloc[cortes[0]:cortes[1]],
+        "val":   tabela.iloc[cortes[1]:],
+    }
 
-    print(f"\n  {len(tabela)} linhas em 2 parquets em {destino}/")
+    for nome, parte in partes.items():
+        parte.to_parquet(destino / f"{nome}.parquet.gzip",
+                         compression="gzip", index=False)
+
+    defeituosos = sum(1 for linha in todas if linha["lines"])
+
+    print(f"\n  {len(tabela)} linhas em 3 parquets em {destino}/")
     print(f"  {defeituosos} defeituosos "
           f"({100 * defeituosos / len(tabela):.0f}%)")
     print(f"  colunas: {list(tabela.columns)}")
