@@ -74,7 +74,7 @@ APAGAR_CLONES = True
 # Desligue quando algum projeto falhar sempre — repositório
 # removido do GitHub, por exemplo — e você quiser treinar com o
 # que já tem. O relatório continua dizendo quais ficaram de fora.
-EXIGIR_TODOS_OS_REPOSITORIOS = True
+EXIGIR_TODOS_OS_REPOSITORIOS = False
 
 # Quando True, o parquet separado de cada repositório é apagado
 # depois que o CSV daquele projeto está gravado.
