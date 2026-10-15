@@ -9,7 +9,7 @@ venv/
 # Clones temporários que a Fase 2 cria e apaga
 clones/
 
-# Modelo treinado
+# Modelo treinado — 602 MB, acima do limite do GitHub
 *.pkl
 *.joblib
 
@@ -17,5 +17,8 @@ clones/
 defectors/
 defectors_amostra/
 
-# Dataset e progresso salvo da montagem
-# dados/
+# Progresso da montagem: refazível, e pesado
+# dados/parciais/
+
+# O dataset e os resultados sobem
+# (dados/)
