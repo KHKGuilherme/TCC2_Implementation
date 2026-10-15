@@ -10,12 +10,12 @@ venv/
 clones/
 
 # Modelo treinado
-*.pkl
-*.joblib
+# *.pkl
+# *.joblib
 
 # O Defectors baixado e a amostra extraída dele
 defectors/
 defectors_amostra/
 
 # Dataset e progresso salvo da montagem
-dados/
+# dados/

@@ -4,16 +4,24 @@ Monta dados/dataset.csv a partir do Defectors.
 O Defectors traz código e rótulo, e nenhuma métrica. Calcular as
 9 features sobre isso é o trabalho deste arquivo.
 
-Duas fases:
+Duas etapas:
 
-  Fase 1 -> lê os parquets e calcula as 6 métricas de código.
-            Minutos, sem rede.
+  Etapa 1 -> uma passada nos parquets grandes, gravando um parquet
+             por repositório. Nada é medido, só redistribuído.
 
-  Fase 2 -> clona cada repositório e mede o histórico de cada
-            arquivo até o commit rotulado. Horas, dezenas de GB.
+  Etapa 2 -> um repositório por vez: mede o código, clona, mede o
+             histórico, grava o CSV daquele projeto, apaga o clone
+             e o parquet separado. Passa para o próximo.
+
+A etapa 2 é desse jeito por causa de duas restrições reais. Em
+disco, nunca existe mais de um clone de cada vez, e os 25 projetos
+juntos passariam de 20 GB. Em tempo, o CSV de cada projeto é
+durável: uma queda no décimo repositório custa o décimo, não os
+nove que já terminaram.
 
 CMD -> python frente1_treinamento/montar_dataset.py
        --listar             mostra os repositórios e os nomes exatos
+       --so-prontos         grava o dataset com os projetos já feitos
        --amostra N          monta só N linhas, sem gravar cópia
        --extrair-amostra N  grava em disco uma cópia reduzida
 """
@@ -29,6 +37,7 @@ import warnings
 from pathlib import Path
 
 import pandas as pd
+import pyarrow as pa
 import pyarrow.parquet as pq
 
 AQUI = Path(__file__).resolve().parent
@@ -50,6 +59,26 @@ COLUNAS_DE_CHAVE = ["repo", "commit", "filepath"]
 # 'lines'. A lista existe para o programa aceitar as duas e não
 # travar por causa do nome.
 APELIDOS_DO_ROTULO = ("lines", "induce_bug", "bug_lines")
+
+# Como a coluna de rótulo passa a se chamar depois da separação.
+# Um nome só aqui dentro evita carregar o apelido do Zenodo por
+# todo o resto do programa.
+ROTULO_PADRAO = "linhas_com_defeito"
+
+# Esquema fixo dos parquets separados por repositório.
+#
+# Declarado à mão, e não deduzido dos dados, porque um lote em que
+# todos os arquivos estão limpos tem só listas vazias: o pyarrow
+# deduziria list<null> nesse lote e list<int64> no seguinte, e a
+# gravação quebraria no meio da separação.
+ESQUEMA_SEPARADO = pa.schema([
+    ("repo",               pa.string()),
+    ("commit",             pa.string()),
+    ("filepath",           pa.string()),
+    ("content",            pa.binary()),
+    (ROTULO_PADRAO,        pa.list_(pa.int64())),
+    ("particao_defectors", pa.string()),
+])
 
 
 # =============================================================
@@ -431,42 +460,180 @@ def medir_um_arquivo(caminho: str, codigo: str):
         return medidas if medidas is not None else "nao_faz_parse"
 
 
+
 # =============================================================
-# Relatar Fase 1
+# Pasta Separado
 # -------------------------------------------------------------
-# Resumo da leitura do parquet
+# Onde ficam os parquets de um repositório cada
 # =============================================================
-def relatar_fase1(contagem: dict, medidas: int) -> None:
-    print("\n\n  Fase 1 concluída.")
-    print(f"    linhas lidas do parquet    : {contagem['lidas']}")
-    if contagem["fora_da_amostra"]:
-        print(f"    fora da amostra planejada  : "
-              f"{contagem['fora_da_amostra']}")
-    print(f"    fora do escopo configurado : {contagem['fora_do_escopo']}")
-    print(f"    caminho ignorado           : {contagem['caminho_ignorado']}")
-    print(f"    sem conteúdo               : {contagem['sem_conteudo']}")
-    print(f"    maior que "
-          f"{config.TAMANHO_MAXIMO_BYTES // 1024} KB          "
-          f": {contagem['grande_demais']}")
-    print(f"    não faz parse              : {contagem['nao_faz_parse']}")
-    print(f"    sem nenhuma função         : {contagem['sem_funcoes']}")
-    print(f"    medidas                    : {medidas}")
+def pasta_separado() -> Path:
+    return pasta_de_trabalho() / "separado"
 
 
 # =============================================================
-# Medir Codigo
+# Escrever Separados
 # -------------------------------------------------------------
-# Fase 1: lê os parquets e mede o código
+# Varre os parquets de origem gravando um parquet por projeto
 # =============================================================
-def medir_codigo() -> pd.DataFrame:
+def escrever_separados(parquets: list[Path], chaves_desejadas,
+                       apenas: set[str] | None) -> tuple[list[str], dict]:
+    pasta = pasta_separado()
+    pasta.mkdir(parents=True, exist_ok=True)
+
+    # Um escritor aberto por repositório, criado na primeira linha
+    # que chega. Escrever lote a lote em vez de acumular é o que
+    # mantém o uso de memória independente do tamanho do projeto:
+    # 'content' é o código-fonte inteiro, e juntar as 43 mil linhas
+    # do ansible na memória antes de gravar não caberia.
+    escritores: dict[str, pq.ParquetWriter] = {}
+    contagem = {"lidas": 0, "fora_do_escopo": 0, "caminho_ignorado": 0,
+                "fora_da_amostra": 0, "separadas": 0}
+
+    try:
+        for caminho in parquets:
+            origem = particao_do_parquet(caminho)
+            rotulo = nome_do_rotulo(caminho)
+            print(f"\n  lendo {caminho.name} [{origem}]",
+                  end=" ", flush=True)
+
+            for lote in pq.ParquetFile(caminho).iter_batches(
+                    batch_size=config.LINHAS_POR_LOTE,
+                    columns=COLUNAS_DE_CHAVE + ["content", rotulo]):
+
+                tabela = lote.to_pandas()
+                contagem["lidas"] += len(tabela)
+
+                # Na recuperação de alguns projetos, descartar o
+                # resto antes dos outros filtros é o que faz a
+                # passada custar pouco
+                if apenas is not None:
+                    tabela = tabela[tabela["repo"].isin(apenas)]
+
+                if len(tabela) and chaves_desejadas is not None:
+                    chaves = zip(tabela["repo"], tabela["commit"],
+                                 tabela["filepath"])
+                    manter = [c in chaves_desejadas for c in chaves]
+                    contagem["fora_da_amostra"] += len(tabela) - sum(manter)
+                    tabela = tabela[manter]
+
+                if len(tabela):
+                    dentro = tabela["repo"].map(repositorio_incluido)
+                    contagem["fora_do_escopo"] += int((~dentro).sum())
+                    tabela = tabela[dentro]
+
+                if len(tabela):
+                    ignorado = tabela["filepath"].map(arquivo_ignorado)
+                    contagem["caminho_ignorado"] += int(ignorado.sum())
+                    tabela = tabela[~ignorado]
+
+                if not len(tabela):
+                    print(".", end="", flush=True)
+                    continue
+
+                tabela = tabela.rename(columns={rotulo: ROTULO_PADRAO})
+                tabela["particao_defectors"] = origem
+
+                # O esquema exige binary, e a origem varia: no
+                # Zenodo 'content' é binary, no Defectors falso é
+                # string
+                tabela["content"] = [
+                    v.encode("utf-8", errors="ignore")
+                    if isinstance(v, str) else v
+                    for v in tabela["content"]]
+
+                for nome, pedaco in tabela.groupby("repo", sort=False):
+                    if nome not in escritores:
+                        destino = pasta / f"{nome.replace('/', '__')}.parquet"
+                        escritores[nome] = pq.ParquetWriter(
+                            destino, ESQUEMA_SEPARADO, compression="gzip")
+
+                    escritores[nome].write_table(pa.Table.from_pandas(
+                        pedaco[ESQUEMA_SEPARADO.names],
+                        schema=ESQUEMA_SEPARADO, preserve_index=False))
+
+                    contagem["separadas"] += len(pedaco)
+
+                print(".", end="", flush=True)
+    finally:
+        # Fechar é obrigatório: o parquet só fica legível quando o
+        # rodapé é gravado, e isso acontece no close
+        for escritor in escritores.values():
+            escritor.close()
+
+    return sorted(escritores), contagem
+
+
+# =============================================================
+# Separar Alguns
+# -------------------------------------------------------------
+# Regrava o parquet separado de projetos específicos
+# =============================================================
+def separar_alguns(apenas: set[str]) -> list[str]:
+    pedidos = sorted(apenas)
+
+    print(f"  Refazendo a separação de {len(pedidos)} "
+          f"repositório(s): {', '.join(pedidos)}")
+
+    # A amostra é replanejada com a mesma semente, então sorteia as
+    # mesmas linhas de antes
+    chaves_desejadas = None
+    parquets = exigir_parquets()
+    if config.TAMANHO_AMOSTRA > 0:
+        chaves_desejadas = planejar_amostra(parquets,
+                                            config.TAMANHO_AMOSTRA)
+
+    nomes, contagem = escrever_separados(parquets, chaves_desejadas, apenas)
+
+    print(f"\n    {contagem['separadas']} linhas regravadas")
+
+    nao_vieram = [n for n in pedidos if n not in nomes]
+    if nao_vieram:
+        print(f"    sem nenhuma linha elegível: {', '.join(nao_vieram)}")
+
+    return nomes
+
+
+# =============================================================
+# Separar por Repositorio
+# -------------------------------------------------------------
+# Etapa 0: uma passada no Defectors, um parquet por projeto
+# =============================================================
+def separar_por_repositorio(apenas: set[str] | None = None) -> list[str]:
+    # Com 'apenas', regrava só os repositórios pedidos e não toca
+    # na marca nem nos outros parquets. É o caminho de recuperação
+    # de quem perdeu o parquet separado de um projeto sem ter o CSV
+    # dele: custa uma releitura dos parquets de origem, e não a
+    # remontagem de tudo.
+    if apenas:
+        return separar_alguns(apenas)
+
+    # É esta etapa que permite tratar um projeto por vez depois.
+    # Ela lê os parquets grandes UMA vez e redistribui as linhas;
+    # a alternativa seria reler os 2 GB a cada repositório.
+    #
+    # Nada é medido aqui, só movido. Por isso é rápida comparada
+    # com o que vem depois.
+    pasta = pasta_separado()
+    marca = pasta_de_trabalho() / "separado.pronto"
+
+    # A marca guarda a lista dos projetos, e não só o fato de ter
+    # terminado. Com APAGAR_SEPARADO ligado os parquets vão sendo
+    # consumidos, então a pasta vazia no fim é o esperado, e é a
+    # lista que diz o que ainda falta conferir.
+    if marca.exists() and not config.FORCAR_MONTAGEM:
+        registro = json.loads(marca.read_text(encoding="utf-8"))
+        nomes = registro["repositorios"]
+        print(f"  Separação reaproveitada: {len(nomes)} repositórios.")
+        return nomes
+
     parquets = exigir_parquets()
 
-    print(f"  {len(parquets)} parquets encontrados:")
+    print(f"  {len(parquets)} parquets de origem:")
     for caminho in parquets:
         print(f"    {caminho.name}  "
               f"({caminho.stat().st_size / 1e6:.0f} MB)")
 
-    # None -> medir todas as que passarem pelos filtros
+    # None -> separar tudo o que passar pelos filtros
     chaves_desejadas = None
     if config.TAMANHO_AMOSTRA > 0:
         print()
@@ -478,94 +645,110 @@ def medir_codigo() -> pd.DataFrame:
                 "REPOSITORIOS_INCLUIDOS no config.py."
             )
 
-    cache = {}
-    contagem = {"lidas": 0, "fora_do_escopo": 0, "caminho_ignorado": 0,
-                "sem_conteudo": 0, "grande_demais": 0,
-                "nao_faz_parse": 0, "sem_funcoes": 0,
-                "fora_da_amostra": 0}
-    linhas = []
+    shutil.rmtree(pasta, ignore_errors=True)
 
-    for caminho in parquets:
-        origem = particao_do_parquet(caminho)
-        rotulo = nome_do_rotulo(caminho)
-        print(f"\n  lendo {caminho.name} [{origem}]", end=" ", flush=True)
+    nomes, contagem = escrever_separados(parquets, chaves_desejadas, None)
 
-        for lote in pq.ParquetFile(caminho).iter_batches(
-                batch_size=config.LINHAS_POR_LOTE,
-                columns=COLUNAS_DE_CHAVE + ["content", rotulo]):
+    print(f"\n\n  Separação concluída.")
+    print(f"    linhas lidas               : {contagem['lidas']}")
+    if contagem["fora_da_amostra"]:
+        print(f"    fora da amostra planejada  : "
+              f"{contagem['fora_da_amostra']}")
+    print(f"    fora do escopo configurado : {contagem['fora_do_escopo']}")
+    print(f"    caminho ignorado           : {contagem['caminho_ignorado']}")
+    print(f"    separadas                  : {contagem['separadas']}")
 
-            for registro in lote.to_pandas().itertuples(index=False):
-                contagem["lidas"] += 1
-
-                if chaves_desejadas is not None:
-                    chave_linha = (registro.repo, registro.commit,
-                                   registro.filepath)
-                    if chave_linha not in chaves_desejadas:
-                        contagem["fora_da_amostra"] += 1
-                        continue
-
-                if not repositorio_incluido(registro.repo):
-                    contagem["fora_do_escopo"] += 1
-                    continue
-
-                if arquivo_ignorado(registro.filepath):
-                    contagem["caminho_ignorado"] += 1
-                    continue
-
-                codigo = registro.content
-                if isinstance(codigo, bytes):
-                    codigo = codigo.decode("utf-8", errors="ignore")
-                if not isinstance(codigo, str) or not codigo.strip():
-                    contagem["sem_conteudo"] += 1
-                    continue
-
-                if len(codigo) > config.TAMANHO_MAXIMO_BYTES:
-                    contagem["grande_demais"] += 1
-                    continue
-
-                # Cache pelo CONTEÚDO: o mesmo arquivo aparece em
-                # muitos commits, quase sempre idêntico. Como a
-                # chave é o texto, nunca devolve medida de outra
-                # versão.
-                chave = hash(codigo)
-                if chave in cache:
-                    medidas = cache[chave]
-                else:
-                    medidas = medir_um_arquivo(registro.filepath, codigo)
-                    cache[chave] = medidas
-
-                if medidas == "nao_faz_parse":
-                    contagem["nao_faz_parse"] += 1
-                    continue
-                if medidas == "sem_funcoes":
-                    contagem["sem_funcoes"] += 1
-                    continue
-
-                quantidade, defeituoso = rotulo_do_registro(
-                    getattr(registro, rotulo))
-
-                linhas.append({
-                    "repositorio": registro.repo,
-                    # Barra normal sempre, para combinar com o que
-                    # o extrator de histórico devolve
-                    "arquivo":     registro.filepath.replace("\\", "/"),
-                    "commit":      str(registro.commit),
-                    "particao_defectors": origem,
-                    **medidas,
-                    "linhas_defeituosas": quantidade,
-                    features.COLUNA_ALVO: defeituoso,
-                })
-
-            print(".", end="", flush=True)
-
-    relatar_fase1(contagem, len(linhas))
-
-    if not linhas:
+    if not nomes:
         raise SystemExit(
-            "Nenhuma linha medida. Rode com --listar e confira "
+            "Nenhum repositório separado. Rode --listar e confira "
             "REPOSITORIOS_INCLUIDOS no config.py contra os nomes "
             "que aparecem no dataset."
         )
+
+    ocupado = sum(c.stat().st_size for c in pasta.glob("*.parquet"))
+    print(f"\n  {len(nomes)} repositórios em {pasta}/ "
+          f"({ocupado / 1e6:.0f} MB)")
+
+    # A marca vai por último. Sem ela a separação é refeita, em vez
+    # de ser lida pela metade depois de uma interrupção.
+    (pasta_de_trabalho() / "separado.pronto").write_text(
+        json.dumps({"assinatura": assinatura_da_fase1(),
+                    "repositorios": nomes}, indent=2),
+        encoding="utf-8")
+
+    return nomes
+
+
+# =============================================================
+# Medir Codigo do Repo
+# -------------------------------------------------------------
+# Fase 1 de um repositório só
+# =============================================================
+def medir_codigo_do_repo(nome: str, caminho: Path) -> pd.DataFrame:
+    cache = {}
+    contagem = {"lidas": 0, "sem_conteudo": 0, "grande_demais": 0,
+                "nao_faz_parse": 0, "sem_funcoes": 0}
+    linhas = []
+
+    for lote in pq.ParquetFile(caminho).iter_batches(
+            batch_size=config.LINHAS_POR_LOTE):
+
+        for registro in lote.to_pandas().itertuples(index=False):
+            contagem["lidas"] += 1
+
+            codigo = registro.content
+            if isinstance(codigo, bytes):
+                codigo = codigo.decode("utf-8", errors="ignore")
+            if not isinstance(codigo, str) or not codigo.strip():
+                contagem["sem_conteudo"] += 1
+                continue
+
+            if len(codigo) > config.TAMANHO_MAXIMO_BYTES:
+                contagem["grande_demais"] += 1
+                continue
+
+            # Cache pelo CONTEÚDO: o mesmo arquivo aparece em
+            # muitos commits, quase sempre idêntico. Como a chave é
+            # o texto, nunca devolve medida de outra versão.
+            chave = hash(codigo)
+            if chave in cache:
+                medidas = cache[chave]
+            else:
+                medidas = medir_um_arquivo(registro.filepath, codigo)
+                cache[chave] = medidas
+
+            if medidas == "nao_faz_parse":
+                contagem["nao_faz_parse"] += 1
+                continue
+            if medidas == "sem_funcoes":
+                contagem["sem_funcoes"] += 1
+                continue
+
+            quantidade, defeituoso = rotulo_do_registro(
+                getattr(registro, ROTULO_PADRAO))
+
+            linhas.append({
+                "repositorio": registro.repo,
+                # Barra normal sempre, para combinar com o que o
+                # extrator de histórico devolve
+                "arquivo":     registro.filepath.replace("\\", "/"),
+                "commit":      str(registro.commit),
+                "particao_defectors": registro.particao_defectors,
+                **medidas,
+                "linhas_defeituosas": quantidade,
+                features.COLUNA_ALVO: defeituoso,
+            })
+
+    descartadas = contagem["lidas"] - len(linhas)
+    print(f"medidas {len(linhas)}/{contagem['lidas']} "
+          f"(-{descartadas}: {contagem['sem_conteudo']} sem conteúdo, "
+          f"{contagem['nao_faz_parse']} sem parse, "
+          f"{contagem['sem_funcoes']} sem função, "
+          f"{contagem['grande_demais']} grandes) ",
+          end="", flush=True)
+
+    if not linhas:
+        return pd.DataFrame()
 
     tabela = pd.DataFrame(linhas)
 
@@ -610,53 +793,53 @@ def pasta_de_trabalho() -> Path:
     return config.PASTA_PARCIAIS / resumo
 
 
-# =============================================================
-# Ler Fase 1 do Disco
-# -------------------------------------------------------------
-# Reaproveita a Fase 1 já feita nesta configuração
-# =============================================================
-def ler_fase1_do_disco() -> pd.DataFrame | None:
-    arquivo = pasta_de_trabalho() / "fase1.csv"
-    marca = pasta_de_trabalho() / "fase1.pronta"
 
-    # A marca só existe se a gravação terminou. Sem ela, o CSV
-    # pode estar truncado por uma interrupção.
-    if not (arquivo.exists() and marca.exists()):
-        return None
+
+# =============================================================
+# Repositorios Pendentes
+# -------------------------------------------------------------
+# Projetos da separação que ainda não têm CSV gravado
+# =============================================================
+def repositorios_pendentes() -> list[str]:
+    # Existe para o dataset pela metade não se passar por pronto.
+    # Sem esta conferência, uma montagem em que 5 dos 25 projetos
+    # falharam grava um dataset.csv válido, e toda execução
+    # seguinte o aceita e nunca mais tenta aqueles 5 — em silêncio.
+    marca = pasta_de_trabalho() / "separado.pronto"
+
+    if not marca.exists():
+        return []
 
     try:
-        tabela = pd.read_csv(arquivo)
+        registro = json.loads(marca.read_text(encoding="utf-8"))
     except Exception:
-        print("  A Fase 1 guardada está ilegível. Refazendo.")
-        return None
+        return []
 
-    if tabela.empty:
-        return None
-
-    print(f"  Fase 1 reaproveitada do disco: {len(tabela)} linhas, "
-          f"{tabela['repositorio'].nunique()} repositórios.")
-    return tabela
-
-
-# =============================================================
-# Gravar Fase 1 no Disco
-# -------------------------------------------------------------
-# Salva assim que a Fase 1 termina
-# =============================================================
-def gravar_fase1_no_disco(tabela: pd.DataFrame) -> None:
     pasta = pasta_de_trabalho()
-    pasta.mkdir(parents=True, exist_ok=True)
 
-    tabela.to_csv(pasta / "fase1.csv", index=False, encoding="utf-8")
+    return [nome for nome in registro.get("repositorios", [])
+            if not (pasta / f"{nome.replace('/', '__')}.csv").exists()]
 
-    # A marca vai por último, e é ela que torna o CSV válido. Se a
-    # máquina morrer no meio, a marca não existe e a Fase 1 é
-    # refeita em vez de ser lida truncada.
-    (pasta / "fase1.pronta").write_text(
-        json.dumps(assinatura_da_fase1(), indent=2), encoding="utf-8")
 
-    print(f"  Fase 1 guardada em {pasta / 'fase1.csv'}")
-    print("  Uma interrupção depois daqui não a refaz.")
+# =============================================================
+# Resumo do Erro
+# -------------------------------------------------------------
+# Uma linha do erro que sirva para entender a causa
+# =============================================================
+def resumo_do_erro(erro: Exception) -> str:
+    linhas = [l.strip() for l in str(erro).splitlines() if l.strip()]
+
+    if not linhas:
+        return type(erro).__name__
+
+    # O GitCommandError empilha o comando, o código de saída e a
+    # saída de erro do git, e termina numa aspa solta. A linha que
+    # explica a causa é a do git, não a primeira nem a última.
+    for linha in linhas:
+        if linha.startswith(("error:", "fatal:", "warning:")):
+            return linha[:100]
+
+    return linhas[0][:100]
 
 
 # =============================================================
@@ -761,10 +944,49 @@ def medir_historico_do_repo(repositorio: str,
                             tabela: pd.DataFrame) -> pd.DataFrame | None:
     pasta = config.PASTA_CLONES / repositorio.replace("/", "__")
 
-    print(f"  {repositorio:<32} clonando... ", end="", flush=True)
-    if not clonar(repositorio, pasta):
-        return None
+    # Duas tentativas, porque o modo típico de falha aqui é o
+    # pacote do clone estar corrompido:
+    #
+    #   error: inflate: data stream error
+    #   error: failed to unpack compressed delta
+    #
+    # Isso acontece quando a máquina morre no meio da gravação do
+    # clone. O dano é local, então apagar e clonar de novo resolve.
+    # Como 'clonar' reaproveita a pasta se o .git existir, apagar
+    # antes é o que força o clone novo.
+    for tentativa in (1, 2):
+        # Sem o nome: quem chama já o imprimiu
+        print("clonando... " if tentativa == 1 else "clonando de novo... ",
+              end="", flush=True)
 
+        if not clonar(repositorio, pasta):
+            return None
+
+        try:
+            return medir_historico_do_clone(repositorio, pasta, tabela)
+        except Exception as erro:
+            resumo = resumo_do_erro(erro)
+
+            if tentativa == 1:
+                print(f"\n      falhou: {resumo}")
+                print("      apagando o clone danificado  ",
+                      end="", flush=True)
+                shutil.rmtree(pasta, ignore_errors=True)
+            else:
+                print(f"\n      falhou de novo: {resumo}")
+                print("      repositório deixado de fora")
+                shutil.rmtree(pasta, ignore_errors=True)
+
+    return None
+
+
+# =============================================================
+# Medir Historico do Clone
+# -------------------------------------------------------------
+# Mede o histórico num clone que já está em disco
+# =============================================================
+def medir_historico_do_clone(repositorio: str, pasta: Path,
+                             tabela: pd.DataFrame) -> pd.DataFrame | None:
     informados = sorted(tabela["commit"].unique())
     mapa = resolver_commits(pasta, informados)
 
@@ -824,6 +1046,91 @@ def medir_historico_do_repo(repositorio: str,
 
 
 # =============================================================
+# Gravar Dataset
+# -------------------------------------------------------------
+# Junta os CSVs por repositório e grava o dataset final
+# =============================================================
+def gravar_dataset(partes: list[pd.DataFrame]) -> pd.DataFrame:
+    dataset = pd.concat(partes, ignore_index=True)
+
+    # Remove linhas de parciais antigos que saíram do escopo
+    dentro = dataset["repositorio"].map(repositorio_incluido)
+    if not dentro.all():
+        fora = sorted(dataset.loc[~dentro, "repositorio"].unique())
+        print(f"\n  {int((~dentro).sum())} linhas de parciais antigos "
+              f"estão fora do escopo e foram removidas: "
+              f"{', '.join(fora)}")
+        dataset = dataset[dentro].reset_index(drop=True)
+
+    # A divisão é aplicada aqui, não guardada nos parciais. Medir é
+    # caro e dividir é instantâneo, então trocar de estratégia não
+    # exige remedir nada.
+    dataset[features.COLUNA_PARTICAO] = divisao.dividir(dataset)
+
+    features.conferir_contrato(dataset.columns)
+    dataset = dataset[features.COLUNAS_CSV]
+
+    config.PASTA_DADOS.mkdir(parents=True, exist_ok=True)
+    dataset.to_csv(config.ARQUIVO_DATASET, index=False, encoding="utf-8")
+
+    return dataset
+
+
+# =============================================================
+# Montar com os Prontos
+# -------------------------------------------------------------
+# Grava o dataset a partir dos CSVs que já existem
+# =============================================================
+def montar_com_os_prontos() -> pd.DataFrame:
+    # Para quando a montagem foi interrompida e você quer trabalhar
+    # com o que já terminou. Não lê parquet, não clona, não mede
+    # nada: só junta os CSVs por repositório que estão em disco.
+    #
+    # Por isso é instantâneo, e por isso não avança o trabalho —
+    # os repositórios que faltam continuam faltando.
+    features.conferir_sem_vazamento()
+    config.conferir_nomes()
+
+    inicio = time.time()
+    pasta = pasta_de_trabalho()
+
+    print("=" * 70)
+    print("MONTAGEM COM OS REPOSITÓRIOS JÁ PRONTOS")
+    print("=" * 70)
+    print(f"\n  parciais: {pasta}/")
+    print(f"  destino : {config.ARQUIVO_DATASET}")
+    print(f"  divisão : {divisao.descrever_divisao()}\n")
+
+    prontos = sorted(pasta.glob("*.csv"))
+
+    if not prontos:
+        raise SystemExit(
+            f"Nenhum CSV por repositório em {pasta}/.\n"
+            f"Rode a montagem normal primeiro: "
+            f"python frente1_treinamento/montar_dataset.py"
+        )
+
+    partes = []
+    for caminho in prontos:
+        tabela = pd.read_csv(caminho)
+        print(f"    {caminho.stem:<24} {len(tabela):>7} linhas")
+        partes.append(tabela)
+
+    dataset = gravar_dataset(partes)
+
+    pendentes = repositorios_pendentes()
+    resumir(dataset, pendentes, time.time() - inicio)
+
+    if pendentes:
+        print(f"  Atenção: este dataset NÃO tem {len(pendentes)} "
+              f"repositório(s) da separação.")
+        print(f"  Para treinar com ele, desligue "
+              f"EXIGIR_TODOS_OS_REPOSITORIOS no config.py.\n")
+
+    return dataset
+
+
+# =============================================================
 # Resumir
 # -------------------------------------------------------------
 # Relatório final da montagem
@@ -843,7 +1150,10 @@ def resumir(dataset: pd.DataFrame, falharam: list[str],
           f"{config.ARQUIVO_DATASET.stat().st_size / 1e6:.1f} MB")
 
     if falharam:
-        print(f"\n  não processados: {', '.join(falharam)}")
+        print(f"\n  não processados ({len(falharam)}): "
+              f"{', '.join(falharam)}")
+        print("  Eles não têm CSV, então basta rodar o mesmo comando de "
+              "novo para tentar só eles.")
 
     print(f"\n  Divisão ({divisao.descrever_divisao()}):")
     for particao, grupo in dataset.groupby(features.COLUNA_PARTICAO):
@@ -892,65 +1202,109 @@ def montar() -> pd.DataFrame:
     print(f"  parciais: {pasta_parciais}/")
 
     print("\n" + "-" * 70)
-    print("FASE 1 — métricas de código (a partir do parquet)")
+    print("ETAPA 1 — separar o Defectors em um parquet por repositório")
     print("-" * 70 + "\n")
 
-    # Reaproveitar a Fase 1 é o que impede que uma interrupção
-    # durante a Fase 2 custe também a releitura do parquet
-    codigo = None if config.FORCAR_MONTAGEM else ler_fase1_do_disco()
+    nomes = separar_por_repositorio()
 
-    if codigo is None:
-        codigo = medir_codigo()
-        gravar_fase1_no_disco(codigo)
+    # Projetos sem CSV e sem parquet separado: a montagem anterior
+    # morreu entre apagar o parquet e gravar o CSV. Regravar só
+    # esses custa uma releitura dos parquets de origem, enquanto
+    # FORCAR_MONTAGEM descartaria todos os CSVs já prontos.
+    if not config.FORCAR_MONTAGEM:
+        faltando = {
+            nome for nome in nomes
+            if not (pasta_parciais /
+                    f"{nome.replace('/', '__')}.csv").exists()
+            and not (pasta_separado() /
+                     f"{nome.replace('/', '__')}.parquet").exists()
+        }
+
+        if faltando:
+            print()
+            separar_alguns(faltando)
 
     print("\n" + "-" * 70)
-    print("FASE 2 — métricas de histórico (a partir dos clones)")
+    print("ETAPA 2 — um repositório por vez: mede, clona, grava, apaga")
     print("-" * 70 + "\n")
 
     partes, falharam = [], []
 
-    for repositorio, tabela in codigo.groupby("repositorio"):
+    for ordem, repositorio in enumerate(nomes, start=1):
         parcial = pasta_parciais / f"{repositorio.replace('/', '__')}.csv"
 
+        # O CSV pronto é o que torna o progresso durável. Uma queda
+        # de energia no décimo repositório custa o décimo, não os
+        # nove anteriores.
         if parcial.exists() and not config.FORCAR_MONTAGEM:
             pronto = pd.read_csv(parcial)
-            print(f"  {repositorio:<32} reaproveitado, "
-                  f"{len(pronto)} linhas")
+            print(f"  [{ordem}/{len(nomes)}] {repositorio:<24} "
+                  f"reaproveitado, {len(pronto)} linhas")
             partes.append(pronto)
             continue
 
-        resultado = medir_historico_do_repo(repositorio, tabela)
+        print(f"  [{ordem}/{len(nomes)}] {repositorio:<24} ",
+              end="", flush=True)
+
+        separado = pasta_separado() / f"{repositorio.replace('/', '__')}.parquet"
+
+        if not separado.exists():
+            # A recuperação acima já tentou regravar este parquet,
+            # então chegar aqui significa que o projeto não tem
+            # nenhuma linha elegível nos parquets de origem
+            print("sem parquet separado e sem linha elegível na origem")
+            falharam.append(repositorio)
+            continue
+
+        # A rede cai, o disco falha, um clone vem corrompido. Sem
+        # esta rede de proteção, qualquer um desses levaria embora
+        # também os repositórios que ainda não foram tentados.
+        try:
+            codigo = medir_codigo_do_repo(repositorio, separado)
+
+            if codigo.empty:
+                print("nenhuma linha mensurável")
+                falharam.append(repositorio)
+                continue
+
+            resultado = medir_historico_do_repo(repositorio, codigo)
+        except KeyboardInterrupt:
+            # Ctrl+C é intenção do usuário, não defeito.
+            #
+            # SystemExit e não 'raise': repassar o KeyboardInterrupt
+            # faria o Python despejar a pilha de chamadas, e uma
+            # parada pedida pelo usuário não deve se parecer com
+            # um erro.
+            #
+            # Também não grava o dataset: gravá-lo pela metade
+            # faria a próxima execução considerá-lo pronto e nunca
+            # mais tentar o que falta.
+            raise SystemExit(
+                f"\n\n  Interrompido durante o {repositorio}.\n"
+                f"  Já estão gravados: {len(partes)} de {len(nomes)}. "
+                f"Rode o mesmo comando para continuar daqui."
+            )
+        except Exception as erro:
+            print(f"\n      erro inesperado: {resumo_do_erro(erro)}")
+            falharam.append(repositorio)
+            continue
 
         if resultado is None:
             falharam.append(repositorio)
-        else:
-            resultado.to_csv(parcial, index=False, encoding="utf-8")
-            partes.append(resultado)
+            continue
+
+        resultado.to_csv(parcial, index=False, encoding="utf-8")
+        partes.append(resultado)
+
+        # Só depois do CSV gravado, para a interrupção nunca cair
+        # entre medir e salvar
+        if config.APAGAR_SEPARADO:
+            separado.unlink(missing_ok=True)
 
     if not partes:
         raise SystemExit("Nenhum repositório processado.")
 
-    dataset = pd.concat(partes, ignore_index=True)
-
-    # Remove linhas de parciais antigos que saíram do escopo
-    dentro = dataset["repositorio"].map(repositorio_incluido)
-    if not dentro.all():
-        fora = sorted(dataset.loc[~dentro, "repositorio"].unique())
-        print(f"\n  {int((~dentro).sum())} linhas de parciais antigos "
-              f"estão fora do escopo e foram removidas: "
-              f"{', '.join(fora)}")
-        dataset = dataset[dentro].reset_index(drop=True)
-
-    # A divisão é aplicada aqui, não guardada nos parciais. Medir é
-    # caro e dividir é instantâneo, então trocar de estratégia não
-    # exige remedir nada.
-    dataset[features.COLUNA_PARTICAO] = divisao.dividir(dataset)
-
-    features.conferir_contrato(dataset.columns)
-    dataset = dataset[features.COLUNAS_CSV]
-
-    config.PASTA_DADOS.mkdir(parents=True, exist_ok=True)
-    dataset.to_csv(config.ARQUIVO_DATASET, index=False, encoding="utf-8")
+    dataset = gravar_dataset(partes)
 
     resumir(dataset, falharam, time.time() - inicio)
     return dataset
@@ -976,6 +1330,10 @@ def main() -> None:
                              "Defectors com N linhas, e sai")
     parser.add_argument("--destino", default="defectors_amostra",
                         help="pasta onde a cópia reduzida é gravada")
+    parser.add_argument("--so-prontos", action="store_true",
+                        help="grava o dataset juntando apenas os "
+                             "repositórios que já têm CSV, sem ler "
+                             "parquet nem clonar nada")
     argumentos = parser.parse_args()
 
     config.conferir_local()
@@ -987,6 +1345,8 @@ def main() -> None:
 
     if argumentos.listar:
         listar_repositorios()
+    elif argumentos.so_prontos:
+        montar_com_os_prontos()
     elif argumentos.extrair_amostra is not None:
         extrair_amostra(argumentos.extrair_amostra,
                         Path(argumentos.destino))

@@ -1,0 +1,2 @@
+repositorio,arquivo,commit,particao_defectors,linhas,complexidade_media,complexidade_maxima,manutenibilidade,maior_funcao,qtd_funcoes,linhas_defeituosas,defeituoso,revisoes,autores,churn
+freqtrade,freqtrade/exchange/bittrex.py,bfb3e09d1d1dff3a8341dc7a43fb44f876f97a1a,train,162,2.69,8,46.4,24,15,20,1,25,5,406

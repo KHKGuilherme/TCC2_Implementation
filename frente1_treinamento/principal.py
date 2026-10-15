@@ -45,6 +45,23 @@ def dataset_utilizavel() -> bool:
     print(f"  Dataset encontrado: {config.ARQUIVO_DATASET} "
           f"({len(dados)} linhas, "
           f"{dados.repositorio.nunique()} repositórios)")
+
+    # Um dataset legível não quer dizer um dataset completo. Se
+    # algum repositório falhou na montagem anterior, ele não tem
+    # CSV, e sem esta conferência nunca mais seria tentado.
+    pendentes = montar_dataset.repositorios_pendentes()
+
+    if pendentes and config.EXIGIR_TODOS_OS_REPOSITORIOS:
+        print(f"  Faltam {len(pendentes)} repositórios: "
+              f"{', '.join(pendentes)}")
+        print("  Montando só eles. Os já prontos são reaproveitados.")
+        return False
+
+    if pendentes:
+        print(f"  Faltam {len(pendentes)} repositórios, mas "
+              f"EXIGIR_TODOS_OS_REPOSITORIOS está desligado: "
+              f"{', '.join(pendentes)}")
+
     return True
 
 

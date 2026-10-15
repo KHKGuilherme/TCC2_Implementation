@@ -23,6 +23,7 @@ sys.path.insert(0, str(AQUI))
 
 import config
 import divisao
+import preparacao
 from extrator import features
 
 
@@ -137,7 +138,9 @@ def carregar_dados() -> tuple[pd.DataFrame, pd.DataFrame]:
     treino = dados[dados[features.COLUNA_PARTICAO] == "treino"]
     teste = dados[dados[features.COLUNA_PARTICAO] == "teste"]
 
-    return treino, teste
+    # O pré-processamento vem DEPOIS da divisão, e não antes: a
+    # média que preenche os buracos tem de sair só do treino
+    return preparacao.preparar(treino, teste)
 
 
 # =============================================================
@@ -239,6 +242,95 @@ def mostrar_importancias(modelo) -> None:
 
 
 # =============================================================
+# Gravar Previsoes
+# -------------------------------------------------------------
+# A probabilidade de cada par (arquivo, commit) reservado
+# =============================================================
+def gravar_previsoes(teste: pd.DataFrame, probabilidade) -> pd.DataFrame:
+    previsoes = pd.DataFrame({
+        "repositorio":  teste["repositorio"].to_numpy(),
+        "arquivo":      teste["arquivo"].to_numpy(),
+        "commit":       teste["commit"].to_numpy(),
+        "probabilidade": probabilidade.round(4),
+        "previsto":     (probabilidade >= config.LIMIAR_DECISAO).astype(int),
+        "real":         teste[features.COLUNA_ALVO].to_numpy(),
+    })
+
+    config.PASTA_DADOS.mkdir(parents=True, exist_ok=True)
+    previsoes.to_csv(config.ARQUIVO_PREVISOES, index=False,
+                     encoding="utf-8")
+
+    return previsoes
+
+
+# =============================================================
+# Risco por Arquivo
+# -------------------------------------------------------------
+# Junta os retratos de um arquivo numa nota só
+# =============================================================
+def risco_por_arquivo(previsoes: pd.DataFrame) -> pd.DataFrame:
+    # Cada arquivo entra no dataset uma vez por commit em que foi
+    # alterado, então o mesmo caminho tem vários retratos com
+    # probabilidades diferentes. Esta é a tabela que responde
+    # "quanto este arquivo é arriscado", uma linha por arquivo.
+    #
+    # A média é a nota principal porque usa todos os retratos. A
+    # máxima acompanha porque um arquivo que já foi muito suspeito
+    # uma vez merece atenção mesmo que a média o dilua.
+    risco = previsoes.groupby(["repositorio", "arquivo"], as_index=False).agg(
+        retratos=("probabilidade", "size"),
+        risco_medio=("probabilidade", "mean"),
+        risco_maximo=("probabilidade", "max"),
+        commits_com_defeito=("real", "sum"),
+    )
+
+    # Rótulo do arquivo: teve defeito em algum dos seus commits.
+    # É o gabarito contra o qual a nota por arquivo é medida.
+    risco["teve_defeito"] = (risco["commits_com_defeito"] > 0).astype(int)
+
+    risco["risco_medio"] = risco["risco_medio"].round(4)
+    risco["risco_maximo"] = risco["risco_maximo"].round(4)
+
+    risco = risco.sort_values("risco_medio", ascending=False,
+                              ignore_index=True)
+
+    risco.to_csv(config.ARQUIVO_RISCO, index=False, encoding="utf-8")
+    return risco
+
+
+# =============================================================
+# Mostrar Ranking de Arquivos
+# -------------------------------------------------------------
+# Os arquivos mais arriscados, e o acerto nessa granularidade
+# =============================================================
+def mostrar_ranking(risco: pd.DataFrame) -> None:
+    y = risco["teve_defeito"].to_numpy()
+    p = risco["risco_medio"].to_numpy()
+
+    print(f"\n  Por arquivo — {len(risco)} arquivos distintos, "
+          f"{int(y.sum())} com defeito ({100 * y.mean():.1f}%)")
+
+    if len(np.unique(y)) > 1:
+        print(f"    AUC na granularidade de arquivo: "
+              f"{roc_auc_score(y, p):.3f}")
+
+    quantos = min(config.TOPO_RANKING, len(risco))
+    print(f"\n  Os {quantos} arquivos mais arriscados")
+    print(f"    {'risco':>6} {'retratos':>9} {'real':>5}  arquivo")
+
+    for _, linha in risco.head(quantos).iterrows():
+        marca = "sim" if linha["teve_defeito"] else "-"
+        caminho = f"{linha['repositorio']}/{linha['arquivo']}"
+        if len(caminho) > 62:
+            caminho = "..." + caminho[-59:]
+        print(f"    {100 * linha['risco_medio']:>5.1f}% "
+              f"{int(linha['retratos']):>9} {marca:>5}  {caminho}")
+
+    print(f"\n  Tabela completa: {config.ARQUIVO_RISCO}")
+    print(f"  Previsão de cada retrato: {config.ARQUIVO_PREVISOES}")
+
+
+# =============================================================
 # Avaliar no teste
 # -------------------------------------------------------------
 # A medição final, nos dados reservados
@@ -282,6 +374,11 @@ def avaliar_no_teste(modelo, teste: pd.DataFrame) -> None:
         encontrados = int(((pg >= config.LIMIAR_DECISAO) & (yg == 1)).sum())
         print(f"    {nome:<32} {len(grupo):>7} {yg.sum():>9} "
               f"{auc:>7.3f} {encontrados:>8}")
+
+    # A saída que interessa na prática: uma nota por arquivo, e não
+    # um número só por projeto
+    previsoes = gravar_previsoes(teste, probabilidade)
+    mostrar_ranking(risco_por_arquivo(previsoes))
 
 
 # =============================================================
@@ -335,6 +432,10 @@ def treinar() -> None:
         raise SystemExit("Conjunto de treino vazio. Confira config.py.")
 
     inicio = time.time()
+
+    # Antes de treinar, porque a correlação é o que explica depois
+    # a importância das features
+    preparacao.descrever(treino)
 
     grupos, divisor, descricao = divisao.validacao(treino)
     print(f"\n  Validação: {descricao}")
