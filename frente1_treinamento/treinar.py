@@ -21,10 +21,12 @@ AQUI = Path(__file__).resolve().parent
 sys.path.insert(0, str(AQUI.parent))
 sys.path.insert(0, str(AQUI))
 
+import balanceamento
 import config
 import divisao
+import graficos
 import preparacao
-from extrator import features
+from extrator import derivadas, features
 
 
 # =============================================================
@@ -42,13 +44,18 @@ def criar_modelos() -> dict:
                                           class_weight="balanced",
                                           random_state=semente)),
         ]),
+        # min_samples_leaf vem do config porque é ele que decide o
+        # tamanho do arquivo salvo: com 3, as 300 árvores somam 8
+        # milhões de nós e 648 MB, acima do limite do GitHub, sem
+        # ganho de AUC
         "Random Forest": Pipeline([
             ("escala", StandardScaler()),
-            ("modelo", RandomForestClassifier(n_estimators=300,
-                                              min_samples_leaf=3,
-                                              class_weight="balanced",
-                                              random_state=semente,
-                                              n_jobs=-1)),
+            ("modelo", RandomForestClassifier(
+                n_estimators=300,
+                min_samples_leaf=config.MINIMO_POR_FOLHA,
+                class_weight="balanced",
+                random_state=semente,
+                n_jobs=-1)),
         ]),
         "Gradient Boosting": Pipeline([
             ("escala", StandardScaler()),
@@ -125,6 +132,11 @@ def carregar_dados() -> tuple[pd.DataFrame, pd.DataFrame]:
     dados = pd.read_csv(config.ARQUIVO_DATASET)
     features.conferir_contrato(dados.columns)
 
+    # ANTES da divisão, de propósito: o percentil é calculado
+    # dentro de cada repositório e precisa de todos os arquivos
+    # dele. Usa só valores de feature, nunca o rótulo.
+    dados = derivadas.acrescentar(dados, features.COLUNAS_BASE)
+
     gravada = dados[features.COLUNA_PARTICAO]
     atual = divisao.dividir(dados)
 
@@ -188,16 +200,28 @@ def comparar_grupos_de_features(treino: pd.DataFrame, nome_modelo: str,
 
     y = treino[features.COLUNA_ALVO].to_numpy()
 
+    base = features.COLUNAS_BASE
+
     conjuntos = {
         "só 'linhas'":      ["linhas"],
         "só 'revisoes'":    ["revisoes"],
         "só código (6)":    features.COLUNAS_CODIGO,
         "só histórico (3)": features.COLUNAS_HISTORICO,
-        "completo (9)":     features.FEATURES,
+        f"medidas ({len(base)})": base,
     }
 
+    # Um grupo derivado de cada vez SOBRE as medidas: a linha
+    # mostra o que aquele grupo acrescenta, e não o que ele vale
+    # sozinho. É esse o número que decide se vale a pena mantê-lo.
+    for nome in derivadas.grupos_ligados():
+        colunas = derivadas.colunas_do_grupo(nome, base)
+        conjuntos[f"medidas + {nome} (+{len(colunas)})"] = base + colunas
+
+    if len(features.FEATURES) > len(base):
+        conjuntos[f"tudo ({len(features.FEATURES)})"] = features.FEATURES
+
     print("\n  Contribuição de cada grupo de features")
-    print(f"    {'':<24} {'AUC':>7}")
+    print(f"    {'':<30} {'AUC':>7}")
 
     for nome, colunas in conjuntos.items():
         X = treino[colunas].to_numpy(dtype=float)
@@ -205,7 +229,7 @@ def comparar_grupos_de_features(treino: pd.DataFrame, nome_modelo: str,
             criar_modelos()[nome_modelo], X, y, grupos, divisor)
         validas = ~np.isnan(probabilidade)
         auc = calcular_metricas(y[validas], probabilidade[validas])["AUC"]
-        print(f"    {nome:<24} {auc:>7.3f}")
+        print(f"    {nome:<30} {auc:>7.3f}")
 
 
 # =============================================================
@@ -233,7 +257,7 @@ def mostrar_importancias(modelo) -> None:
     print(f"\n  Importância das features ({origem})")
     for i in np.argsort(pesos)[::-1]:
         barra = "#" * int(round(pesos[i] * 60))
-        print(f"    {features.FEATURES[i]:<24} {pesos[i]:.3f}  {barra}")
+        print(f"    {features.FEATURES[i]:<28} {pesos[i]:.3f}  {barra}")
 
     peso_historico = sum(pesos[features.FEATURES.index(c)]
                          for c in features.COLUNAS_HISTORICO)
@@ -395,11 +419,20 @@ def salvar(modelo, nome: str) -> None:
         "nome":     nome,
         "features": features.FEATURES,
         "limiar":   config.LIMIAR_DECISAO,
-    }, config.ARQUIVO_MODELO)
+    }, config.ARQUIVO_MODELO, compress=config.COMPRESSAO_DO_MODELO)
 
     tamanho = config.ARQUIVO_MODELO.stat().st_size / 1e6
     print(f"\n  Modelo gravado: {config.ARQUIVO_MODELO} "
           f"({nome}, {tamanho:.1f} MB)")
+
+    # O GitHub recusa arquivo acima de 100 MB, e a recusa derruba o
+    # push inteiro. Avisar aqui é melhor que descobrir depois de
+    # dois minutos enviando.
+    if tamanho > 100:
+        print(f"  AVISO: acima do limite de 100 MB do GitHub. "
+              f"Aumente MINIMO_POR_FOLHA no config.py.")
+    elif tamanho > 50:
+        print(f"  AVISO: acima dos 50 MB recomendados pelo GitHub.")
 
 
 # =============================================================
@@ -417,8 +450,10 @@ def treinar() -> None:
     print("TREINAMENTO")
     print("=" * 70)
     print(f"\n  dataset  : {config.ARQUIVO_DATASET}")
-    print(f"  features : {len(features.FEATURES)} "
-          f"({', '.join(features.FEATURES)})")
+    print(f"  features : {len(features.COLUNAS_BASE)} medidas + "
+          f"{len(features.FEATURES) - len(features.COLUNAS_BASE)} derivadas")
+    print(f"  derivadas: {derivadas.descrever(features.COLUNAS_BASE)}")
+    print(f"  balanceamento: {balanceamento.descrever()}")
     print(f"  divisão  : {divisao.descrever_divisao()}")
     print(f"  treino   : {len(treino)} linhas, "
           f"{treino.repositorio.nunique()} repositórios, "
@@ -433,9 +468,17 @@ def treinar() -> None:
 
     inicio = time.time()
 
-    # Antes de treinar, porque a correlação é o que explica depois
-    # a importância das features
+    # A correlação sai ANTES do balanceamento, de propósito: ela
+    # descreve os dados, e replicar linha mexe nos coeficientes.
+    # Numa medição a diferença foi de -0,075 para -0,166 só por
+    # causa das repetições — a tabela da monografia tem de falar
+    # dos dados reais, não da cópia reamostrada.
     preparacao.descrever(treino)
+
+    # Depois da divisão: o teste mantém a proporção real, e os
+    # grupos da validação cruzada são formados a partir do treino
+    # que sai daqui
+    treino = balanceamento.balancear(treino)
 
     grupos, divisor, descricao = divisao.validacao(treino)
     print(f"\n  Validação: {descricao}")
@@ -460,6 +503,10 @@ def treinar() -> None:
         avaliar_no_teste(modelo, teste)
 
     salvar(modelo, melhor)
+
+    if config.GERAR_GRAFICOS:
+        graficos.desenhar(modelo, melhor, teste)
+
     print(f"\n  {time.time() - inicio:.0f} segundos\n")
 
 

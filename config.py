@@ -35,6 +35,11 @@ ARQUIVO_CORRELACAO = PASTA_DADOS / "correlacao_spearman.csv"
 ARQUIVO_CORRELACAO_PEARSON = PASTA_DADOS / "correlacao_pearson.csv"
 ARQUIVO_MAPA_DE_CALOR = PASTA_DADOS / "mapa_de_calor.png"
 
+# Gráficos do modelo treinado
+ARQUIVO_GRAFICO_IMPORTANCIA = PASTA_DADOS / "grafico_importancia.png"
+ARQUIVO_GRAFICO_PERMUTACAO = PASTA_DADOS / "grafico_permutacao.png"
+ARQUIVO_GRAFICO_ARVORE = PASTA_DADOS / "grafico_arvore.png"
+
 
 # =============================================================
 # ESTRUTURA DO DEFECTORS
@@ -74,7 +79,7 @@ APAGAR_CLONES = True
 # Desligue quando algum projeto falhar sempre — repositório
 # removido do GitHub, por exemplo — e você quiser treinar com o
 # que já tem. O relatório continua dizendo quais ficaram de fora.
-EXIGIR_TODOS_OS_REPOSITORIOS = False
+EXIGIR_TODOS_OS_REPOSITORIOS = True
 
 # Quando True, o parquet separado de cada repositório é apagado
 # depois que o CSV daquele projeto está gravado.
@@ -266,6 +271,29 @@ ARQUIVOS_IGNORADOS = (
 
 
 # =============================================================
+# FEATURES DERIVADAS
+# =============================================================
+
+# Grupos de features calculadas a partir das 9 medidas. Ligar ou
+# desligar NÃO exige remontar o dataset: elas são recalculadas a
+# cada treino, em segundos.
+#
+# Ligue um de cada vez e compare o AUC. A tabela "Contribuição de
+# cada grupo de features" mede exatamente isso, e cada linha dela
+# é um resultado para a monografia — inclusive as que não
+# melhorarem.
+#
+#   razões        -> divide pelo tamanho (churn por revisão, etc.)
+#   desequilíbrio -> a pior função contra a média delas
+#   percentil     -> posição do arquivo dentro do próprio projeto
+#   caminho       -> profundidade, é teste, é __init__
+USAR_RAZOES = True
+USAR_DESEQUILIBRIO = True
+USAR_PERCENTIL = True
+USAR_CAMINHO = True
+
+
+# =============================================================
 # PRÉ-PROCESSAMENTO
 # =============================================================
 
@@ -281,6 +309,42 @@ FRACAO_MAXIMA_FALTANTE = 0.5
 # carregando informação parecida
 CORRELACAO_ALTA = 0.8
 
+# Quantos pares redundantes aparecem na tela. A matriz inteira
+# continua indo para o CSV.
+TOPO_PARES = 15
+
+# Acima de quantas features o mapa de calor deixa de escrever o
+# número dentro de cada célula. Passando disso o número não cabe e
+# o mapa fica ilegível; a cor continua comunicando.
+MAXIMO_ANOTADO = 16
+
+
+# =============================================================
+# BALANCEAMENTO DAS CLASSES
+# =============================================================
+
+# Quando ligado, o TREINO passa a ter a mesma quantidade de
+# defeituosos e de limpos. O conjunto reservado nunca é tocado:
+# ele precisa manter a proporção real para a avaliação valer.
+#
+# Antes de ligar, saiba duas coisas sobre os seus dados:
+#
+#   O dataset já está quase equilibrado (47% de defeituosos), e
+#   balanceamento resolve desequilíbrio severo, tipo 95/5.
+#
+#   O AUC quase não muda com isso, porque mede ordenação e
+#   ordenação não depende da proporção. O que muda são F1,
+#   precisão e revocação no limiar 0,5.
+BALANCEAR_TREINO = False
+
+#   "replicar" -> sorteia com reposição da classe menor.
+#                 Não perde dado, mas repete linha, e linha
+#                 repetida deixa o modelo mais confiante do que os
+#                 dados sustentam.
+#   "reduzir"  -> descarta da classe maior. Não repete nada, mas
+#                 joga dado fora.
+ESTRATEGIA_BALANCEAMENTO = "replicar"
+
 
 # =============================================================
 # PARÂMETROS DO TREINO
@@ -288,6 +352,44 @@ CORRELACAO_ALTA = 0.8
 
 # Probabilidade a partir da qual o arquivo é marcado como defeituoso
 LIMIAR_DECISAO = 0.5
+
+# Mínimo de linhas em cada folha das árvores.
+#
+# É o parâmetro que governa o TAMANHO do modelo salvo, e medido no
+# dataset de 137 mil linhas a diferença é brutal:
+#
+#   folha=3   -> AUC 0,616   647,8 MB   8.096.044 nós
+#   folha=50  -> AUC 0,615    45,1 MB     562.904 nós
+#   folha=200 -> AUC 0,608    11,4 MB     140.780 nós
+#
+# Com folha=3 cada árvore cresce até sobrarem 3 linhas por folha,
+# o que em sinal fraco é decorar ruído. O AUC não melhora e o
+# arquivo passa do limite de 100 MB do GitHub.
+MINIMO_POR_FOLHA = 50
+
+# Compressão do joblib, de 0 a 9. Corta o modelo pela metade ou
+# mais, ao custo de alguns segundos para gravar e carregar.
+COMPRESSAO_DO_MODELO = 3
+
+
+# =============================================================
+# GRÁFICOS DO MODELO
+# =============================================================
+
+GERAR_GRAFICOS = True
+
+# Níveis da árvore que aparecem no desenho. Uma árvore treinada em
+# 97 mil linhas chega a 44 de profundidade e sai como uma mancha
+# preta; os primeiros níveis é que mostram por onde o modelo
+# começa a decidir.
+PROFUNDIDADE_DO_GRAFICO = 3
+
+# A importância por permutação é a medida honesta quando as
+# features são correlacionadas, mas custa uma previsão inteira por
+# feature e por repetição.
+GERAR_PERMUTACAO = True
+AMOSTRA_PERMUTACAO = 20_000
+REPETICOES_PERMUTACAO = 5
 
 # Quantos arquivos aparecem no ranking de risco impresso na tela.
 # O arquivo completo é gravado em ARQUIVO_RISCO de qualquer jeito.

@@ -2,6 +2,10 @@
 # Este arquivo define as Colunas e sua Ordem.
 # ==============================================================
 
+# Relativo porque 'extrator' é um pacote: assim funciona
+# independente de quem importa e de onde
+from . import derivadas
+
 # -------------------------------------------------------------
 # Como o código está escrito (Radon e Lizard)
 # -------------------------------------------------------------
@@ -23,8 +27,21 @@ COLUNAS_HISTORICO = [
     "churn",      # total de linhas adicionadas mais removidas
 ]
 
-# A ordem em que o modelo espera receber os valores.
-FEATURES = COLUNAS_CODIGO + COLUNAS_HISTORICO
+# =============================================================
+# AS DUAS LISTAS, QUE SÃO COISAS DIFERENTES
+# =============================================================
+
+# O que está GRAVADO no dataset.csv. É o contrato do arquivo.
+COLUNAS_BASE = COLUNAS_CODIGO + COLUNAS_HISTORICO
+
+# O que o MODELO recebe: as medidas mais as derivadas ligadas no
+# config.
+#
+# Separar as duas é o que permite acrescentar features derivadas
+# sem invalidar um dataset que levou horas para ser montado: as
+# derivadas são calculadas na hora de treinar, a partir das
+# medidas, e nunca precisam estar no CSV.
+FEATURES = COLUNAS_BASE + derivadas.colunas_ativas(COLUNAS_BASE)
 
 # =============================================================
 # O QUE O MODELO PREVÊ
@@ -64,8 +81,10 @@ COLUNA_PARTICAO = "particao"
 # A ORDEM DAS COLUNAS NO CSV
 # =============================================================
 
+# COLUNAS_BASE e não FEATURES: o CSV guarda só o que foi medido.
+# As derivadas são recalculadas a cada treino, de graça.
 COLUNAS_CSV = (COLUNAS_IDENTIFICACAO
-               + FEATURES
+               + COLUNAS_BASE
                + COLUNAS_DIAGNOSTICO
                + [COLUNA_ALVO, COLUNA_PARTICAO])
 
@@ -75,6 +94,12 @@ COLUNAS_CSV = (COLUNAS_IDENTIFICACAO
 # Valida um conjunto de colunas
 # =============================================================
 def conferir_contrato(colunas) -> None:
+    """Interrompe o programa se faltar alguma coluna obrigatória.
+
+    Chamada antes de gravar o dataset e antes de treinar. A ideia
+    é que a divergência apareça aqui, de forma visível, em vez de
+    virar uma previsão errada mais adiante.
+    """
     faltando = [c for c in COLUNAS_CSV if c not in colunas]
     if faltando:
         raise ValueError(f"Colunas faltando no dataset: {faltando}")
@@ -86,6 +111,12 @@ def conferir_contrato(colunas) -> None:
 # Valida que o rótulo não é feature
 # =============================================================
 def conferir_sem_vazamento() -> None:
+    """Interrompe o programa se uma coluna de diagnóstico virar feature.
+
+    As colunas de diagnóstico derivam do rótulo. Se uma delas
+    entrasse na lista de features, o modelo atingiria acerto
+    perfeito e o resultado não significaria nada.
+    """
     proibidas = set(FEATURES) & (set(COLUNAS_DIAGNOSTICO)
                                  | {COLUNA_ALVO, COLUNA_PARTICAO})
     if proibidas:

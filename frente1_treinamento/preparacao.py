@@ -28,7 +28,7 @@ sys.path.insert(0, str(AQUI))
 
 import config
 import divisao
-from extrator import features
+from extrator import derivadas, features
 
 
 # =============================================================
@@ -89,12 +89,12 @@ def diagnosticar(dados: pd.DataFrame) -> pd.DataFrame:
 # Mostrar Diagnostico
 # -------------------------------------------------------------
 def mostrar_diagnostico(quadro: pd.DataFrame) -> None:
-    print(f"\n  {'feature':<22} {'faltando':>9} {'%':>7} {'inf':>5} "
+    print(f"\n  {'feature':<28} {'faltando':>9} {'%':>7} {'inf':>5} "
           f"{'zeros':>7} {'neg':>5} {'mínimo':>10} {'média':>10} "
           f"{'máximo':>10}")
 
     for _, l in quadro.iterrows():
-        print(f"  {l['feature']:<22} {int(l['faltando']):>9} "
+        print(f"  {l['feature']:<28} {int(l['faltando']):>9} "
               f"{l['%faltando']:>6.2f}% {int(l['infinitos']):>5} "
               f"{int(l['zeros']):>7} {int(l['negativos']):>5} "
               f"{l['minimo']:>10.2f} {l['media']:>10.2f} "
@@ -193,10 +193,20 @@ def preparar(treino: pd.DataFrame,
     print(f"    treino : {buracos_treino}")
     print(f"    teste  : {buracos_teste}")
 
+    # Feature constante no treino não carrega informação: o modelo
+    # não tem como usá-la, e ela ainda estraga a matriz de
+    # correlação com NaN. Avisar é melhor que remover em silêncio,
+    # porque a causa costuma ser escopo pequeno demais.
+    constantes = [c for c in features.FEATURES
+                  if treino[c].nunique(dropna=True) <= 1]
+    if constantes:
+        print(f"\n  Constantes no treino, sem poder informativo: "
+              f"{', '.join(constantes)}")
+
     if buracos_treino or buracos_teste:
         print("\n  Médias usadas (vindas do treino):")
         for coluna in features.FEATURES:
-            print(f"    {coluna:<22} {medias[coluna]:>12.3f}")
+            print(f"    {coluna:<28} {medias[coluna]:>12.3f}")
     else:
         print("    nenhum buraco: o preenchimento não alterou nada")
 
@@ -245,14 +255,27 @@ def salvar_correlacoes(dados: pd.DataFrame) -> pd.DataFrame:
 # -------------------------------------------------------------
 def mostrar_correlacao_com_alvo(spearman: pd.DataFrame) -> None:
     coluna = spearman[features.COLUNA_ALVO].drop(features.COLUNA_ALVO)
-    ordem = coluna.abs().sort_values(ascending=False).index
+
+    # na_position para as constantes caírem no fim da lista em vez
+    # de no começo
+    ordem = coluna.abs().sort_values(ascending=False,
+                                     na_position="last").index
 
     print(f"\n  Correlação de Spearman com '{features.COLUNA_ALVO}'")
 
     for nome in ordem:
         valor = coluna[nome]
+
+        # Coluna constante não tem correlação definida, e o NaN
+        # resultante quebraria a conta da barra. Acontece de
+        # verdade: 'eh_init' é zero em quase todo arquivo, e num
+        # recorte pequeno pode ser zero em todos.
+        if pd.isna(valor):
+            print(f"    {nome:<28} {'—':>7}  (constante no treino)")
+            continue
+
         barra = "#" * int(round(abs(valor) * 50))
-        print(f"    {nome:<22} {valor:>+7.3f}  {barra}")
+        print(f"    {nome:<28} {valor:>+7.3f}  {barra}")
 
     # Pares muito correlacionados entre si carregam a mesma
     # informação. Vale saber antes de interpretar a importância
@@ -268,10 +291,16 @@ def mostrar_correlacao_com_alvo(spearman: pd.DataFrame) -> None:
                               sem_alvo.loc[a, b]))
 
     if pares:
+        # Com 29 features existem 406 pares possíveis, e listar
+        # todos os redundantes enterraria o resto da saída
+        pares.sort(reverse=True)
+        mostrados = pares[:config.TOPO_PARES]
+
         print(f"\n  Pares de features com |correlação| >= "
-              f"{config.CORRELACAO_ALTA}")
-        for _, a, b, valor in sorted(pares, reverse=True):
-            print(f"    {a:<22} {b:<22} {valor:>+7.3f}")
+              f"{config.CORRELACAO_ALTA} "
+              f"({len(mostrados)} de {len(pares)})")
+        for _, a, b, valor in mostrados:
+            print(f"    {a:<28} {b:<28} {valor:>+7.3f}")
         print("    Elas carregam informação parecida, então a "
               "importância se divide entre elas.")
 
@@ -294,29 +323,42 @@ def salvar_mapa_de_calor(matriz: pd.DataFrame) -> bool:
 
     nomes = list(matriz.columns)
     valores = matriz.to_numpy(dtype=float)
+    quantas = len(nomes)
 
-    figura, eixo = plt.subplots(figsize=(9, 7.5))
+    # A figura cresce com o número de features. Com tamanho fixo,
+    # 29 features espremem as células e os números se sobrepõem
+    # até o mapa não servir para nada.
+    lado = max(9.0, 0.42 * quantas + 3.5)
+    figura, eixo = plt.subplots(figsize=(lado, lado * 0.85))
 
     # vmin e vmax fixos em -1 e 1, e paleta divergente centrada no
     # zero: sem isso a escala se ajusta aos dados e duas figuras
     # de execuções diferentes deixam de ser comparáveis
     imagem = eixo.imshow(valores, cmap="RdBu_r", vmin=-1, vmax=1)
 
-    eixo.set_xticks(range(len(nomes)))
-    eixo.set_yticks(range(len(nomes)))
-    eixo.set_xticklabels(nomes, rotation=45, ha="right", fontsize=9)
-    eixo.set_yticklabels(nomes, fontsize=9)
+    fonte = 9 if quantas <= 16 else 7
 
-    for i in range(len(nomes)):
-        for j in range(len(nomes)):
-            valor = valores[i, j]
-            # Texto branco sobre célula escura, preto sobre clara
-            cor = "white" if abs(valor) > 0.55 else "black"
-            eixo.text(j, i, f"{valor:.2f}", ha="center", va="center",
-                      color=cor, fontsize=8)
+    eixo.set_xticks(range(quantas))
+    eixo.set_yticks(range(quantas))
+    eixo.set_xticklabels(nomes, rotation=45, ha="right", fontsize=fonte)
+    eixo.set_yticklabels(nomes, fontsize=fonte)
 
-    eixo.set_title("Correlação de Spearman entre as métricas e o "
-                   "defeito\n(conjunto de treino)", fontsize=11, pad=14)
+    # Acima de 16 features o número não cabe na célula. Nesse caso
+    # a cor sozinha comunica, e quem quer o valor exato abre o CSV.
+    if quantas <= config.MAXIMO_ANOTADO:
+        for i in range(quantas):
+            for j in range(quantas):
+                valor = valores[i, j]
+                if np.isnan(valor):
+                    continue
+                # Texto branco sobre célula escura, preto sobre clara
+                cor = "white" if abs(valor) > 0.55 else "black"
+                eixo.text(j, i, f"{valor:.2f}", ha="center", va="center",
+                          color=cor, fontsize=fonte - 1)
+
+    eixo.set_title(f"Correlação de Spearman entre as {quantas - 1} "
+                   f"features e o defeito\n(conjunto de treino)",
+                   fontsize=12, pad=14)
 
     figura.colorbar(imagem, ax=eixo, shrink=0.8,
                     label="coeficiente de Spearman")
@@ -366,12 +408,19 @@ def main() -> None:
     dados = pd.read_csv(config.ARQUIVO_DATASET)
     features.conferir_contrato(dados.columns)
 
+    # As mesmas derivadas que o treino usa, para o diagnóstico
+    # falar das features que o modelo realmente recebe
+    dados = derivadas.acrescentar(dados, features.COLUNAS_BASE)
+
     print("=" * 70)
     print("DIAGNÓSTICO DO DATASET")
     print("=" * 70)
     print(f"\n  arquivo : {config.ARQUIVO_DATASET}")
     print(f"  {len(dados)} linhas, "
           f"{dados['repositorio'].nunique()} repositórios")
+    print(f"  {len(features.COLUNAS_BASE)} medidas + "
+          f"{len(features.FEATURES) - len(features.COLUNAS_BASE)} derivadas")
+    print(f"  derivadas: {derivadas.descrever(features.COLUNAS_BASE)}")
 
     mostrar_diagnostico(diagnosticar(dados))
 
