@@ -103,7 +103,7 @@ DATASET GRAVADO: dados\dataset.csv
   Divisão (GroupShuffleSplit por arquivo — 30% dos arquivos):
     teste      10241 linhas,   3748 defeituosos (36.6%), 4 repositórios
     treino     25019 linhas,   9589 defeituosos (38.3%), 4 repositórios
-
+  
   Por repositório:
     repositório                       linhas  %defeito  rev.méd  partições
     sentry                             31454     36.7%     72.6  teste/treino
