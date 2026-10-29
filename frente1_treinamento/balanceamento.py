@@ -1,23 +1,3 @@
-"""
-Iguala a quantidade de defeituosos e limpos no treino.
-
-Duas regras mandam aqui, e as duas importam mais que a escolha da
-estratégia:
-
-  1. Vale só para o TREINO. Balancear o conjunto reservado faria a
-     precisão medir uma proporção que não existe no mundo real, e
-     a avaliação final deixaria de valer.
-
-  2. A reamostragem não quebra o agrupamento por arquivo. Cada
-     linha carrega seu repositório e seu caminho, então sortear
-     linhas não mistura um arquivo entre treino e teste — essa
-     separação já foi feita antes.
-
-Vale saber antes de ligar: o AUC quase não muda com isso. Ele mede
-ordenação, e ordenação não depende da proporção entre as classes.
-O que muda são F1, precisão e revocação no limiar 0,5.
-"""
-
 import sys
 from pathlib import Path
 

@@ -1,25 +1,5 @@
 """
 Desenha o modelo treinado: o peso de cada feature e uma árvore.
-
-Três figuras, e a diferença entre as duas primeiras é o ponto
-principal deste arquivo:
-
-  grafico_importancia.png  -> o peso que o próprio modelo declara
-  grafico_permutacao.png   -> quanto o AUC cai se a feature for
-                              embaralhada
-  grafico_arvore.png       -> uma árvore de decisão, por dentro
-
-A importância declarada é enganosa quando as features são
-correlacionadas, e as nossas chegam a 0,91 entre si. Se 'linhas' e
-'churn' carregam a mesma informação, a árvore escolhe uma das duas
-quase por sorteio em cada nó, e o crédito se divide entre elas.
-Duas features essenciais aparecem como duas medianas.
-
-A permutação mede outra coisa: embaralha a coluna e vê quanto o
-desempenho piora. É a pergunta honesta, e com features redundantes
-ela responde baixo para as duas — porque a informação continua
-disponível na outra. Ler as duas juntas é o que mostra a
-redundância.
 """
 
 import sys

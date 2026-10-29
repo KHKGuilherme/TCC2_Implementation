@@ -128,21 +128,8 @@ def colunas_medidas() -> list[str]:
     return colunas
 
 
-# O que está GRAVADO no dataset.csv. É o contrato do arquivo.
-#
-# Desligar um grupo de medição muda esta lista, e portanto muda a
-# assinatura da montagem — o que faz o dataset ser remontado numa
-# pasta de parciais própria, em vez de misturar medições
-# diferentes no mesmo arquivo.
 COLUNAS_BASE = colunas_medidas()
 
-# O que o MODELO recebe: as medidas mais as derivadas ligadas no
-# config.
-#
-# Separar as duas é o que permite acrescentar features derivadas
-# sem invalidar um dataset que levou horas para ser montado: as
-# derivadas são calculadas na hora de treinar, a partir das
-# medidas, e nunca precisam estar no CSV.
 FEATURES = COLUNAS_BASE + derivadas.colunas_ativas(COLUNAS_BASE)
 
 # =============================================================
@@ -221,11 +208,6 @@ def origem_da_feature(coluna: str) -> str:
 
     return "outra"
 
-
-# Raízes que identificam a origem de uma coluna, inclusive nas
-# derivadas: 'churn_por_revisao' casa com churn e com revisoes,
-# 'churn_por_linha' casa com churn e com linhas, e por isso sai
-# como mista.
 PALAVRAS_DE_HISTORICO = ("revisoes", "autores", "churn", "insercoes",
                          "remocoes", "idade", "dias", "commits_",
                          "autor_principal", "menores", "por_commit")

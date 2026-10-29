@@ -1,18 +1,6 @@
 """
 Cria features novas a partir das 9 que já foram medidas.
 
-Nada aqui lê código nem histórico: são contas sobre o dataset
-pronto. Por isso acrescentar ou tirar um grupo não exige remontar
-nada.
-
-O motivo de existirem é o que a matriz de correlação mostrou: as 9
-features medidas são quase todas proxy de TAMANHO. linhas e churn
-0,91; linhas e qtd_funcoes 0,91; revisoes e autores 0,88. Arquivo
-grande tem mais de tudo, então "tem muito churn" quase sempre quer
-dizer só "é grande".
-
-Os quatro grupos atacam isso de ângulos diferentes:
-
   razoes        -> divide pelo tamanho, sobra o que não é tamanho
   desequilibrio -> o que as médias escondem
   percentil     -> posição dentro do PRÓPRIO projeto
@@ -80,10 +68,6 @@ PREFIXO_PERCENTIL = "pct_"
 # Divisão que devolve vazio em vez de infinito
 # =============================================================
 def dividir(a: pd.Series, b: pd.Series) -> pd.Series:
-    # Dividir por zero no pandas produz infinito, e infinito faz o
-    # StandardScaler devolver NaN na coluna inteira — longe daqui,
-    # e sem erro. Virar vazio aqui deixa o preparacao.py preencher
-    # com a média do treino, que é o tratamento que já existe.
     return (a / b).replace([np.inf, -np.inf], np.nan)
 
 
@@ -150,9 +134,6 @@ def acrescentar_caminho(dados: pd.DataFrame) -> pd.DataFrame:
 
     dados["profundidade"] = caminho.str.count("/")
     dados["comprimento_do_caminho"] = caminho.str.len()
-
-    # Teste tem perfil de defeito diferente de código de produção,
-    # e o dataset não separa os dois
     pasta_de_teste = caminho.str.contains(r"(?:^|/)tests?/", regex=True,
                                           na=False)
     nome_de_teste = (nome.str.startswith("test_")
@@ -170,15 +151,6 @@ def acrescentar_caminho(dados: pd.DataFrame) -> pd.DataFrame:
 # Quais medidas merecem a versão em percentil
 # =============================================================
 def colunas_para_percentil(base: list[str]) -> list[str]:
-    # Nem toda medida pede percentil. Ele existe para tirar a
-    # ESCALA do projeto, e isso só faz sentido em contagem e
-    # tamanho: 500 linhas é enorme no black e comum no cpython.
-    #
-    # Já 'fracao_autor_principal' e 'parametros_media' são razões
-    # ou médias que não crescem com o projeto, e dar percentil a
-    # elas só multiplicaria colunas redundantes. Com as 44 medidas
-    # atuais, o grupo passaria de 9 para 44 colunas e o modelo
-    # chegaria a 99 features.
     if not config.PERCENTIL_SO_NAS_BASICAS:
         return list(base)
 
@@ -192,17 +164,6 @@ def colunas_para_percentil(base: list[str]) -> list[str]:
 # =============================================================
 def acrescentar_percentil(dados: pd.DataFrame,
                           colunas: list[str]) -> pd.DataFrame:
-    # Um arquivo de 500 linhas é enorme no black e comum no
-    # cpython. O modelo recebe "500" e não sabe em qual dos dois
-    # mundos está — e é justamente isso que quebra quando a
-    # ferramenta aponta para um projeto que ela nunca viu.
-    #
-    # O percentil dentro do próprio repositório torna as features
-    # comparáveis entre projetos.
-    #
-    # Não é vazamento: usa só os valores das features, nunca o
-    # rótulo. E é reproduzível na previsão, porque a ferramenta
-    # clona o repositório inteiro antes de julgar qualquer arquivo.
     por_repositorio = dados.groupby("repositorio")
 
     for coluna in colunas_para_percentil(colunas):
@@ -221,14 +182,9 @@ def acrescentar_percentil(dados: pd.DataFrame,
 def colunas_de_percentil(base: list[str]) -> list[str]:
     return [PREFIXO_PERCENTIL + c for c in colunas_para_percentil(base)]
 
-
-# Cada entrada diz como se chama a chave no config, quais colunas
-# o grupo cria, e qual função as cria.
 GRUPOS = {
     "razoes": {
         "chave":   "USAR_RAZOES",
-        # None: as razões opcionais dependem de quais grupos de
-        # medição estão ligados, então a lista é montada na hora
         "colunas": None,
         "funcao":  acrescentar_razoes,
     },
@@ -242,8 +198,6 @@ GRUPOS = {
         "colunas": COLUNAS_CAMINHO,
         "funcao":  acrescentar_caminho,
     },
-    # O percentil é o único que depende de quais são as features
-    # medidas, então recebe a lista em vez de tê-la fixa
     "percentil": {
         "chave":   "USAR_PERCENTIL",
         "colunas": None,
@@ -272,8 +226,6 @@ def colunas_do_grupo(nome: str, base: list[str]) -> list[str]:
         return colunas_de_percentil(base)
 
     if nome == "razoes":
-        # As opcionais só existem se as duas colunas de origem
-        # foram medidas
         opcionais = [c for c, (a, b) in RAZOES_OPCIONAIS.items()
                      if a in base and b in base]
         return COLUNAS_RAZOES_FIXAS + opcionais

@@ -1,18 +1,3 @@
-"""
-Decide como os dados são separados para avaliar o modelo.
-
-São duas decisões distintas:
-
-  Divisão treino/teste -> qual parte fica guardada para a medição final
-  Validação cruzada    -> como as dobras são formadas DENTRO do treino
-
-O que diferencia as estratégias é o que elas permitem aparecer nos dois lados:
-
-  por repositório -> nada do mesmo projeto           (mais severa)
-  por arquivo     -> mesmo projeto sim, mesmo arquivo não
-  por linha       -> qualquer linha em qualquer lado (mais otimista)
-"""
-
 import sys
 from pathlib import Path
 

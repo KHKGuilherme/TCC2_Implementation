@@ -107,10 +107,6 @@ def medir_halstead(codigo: str) -> dict:
 # Tokens e parâmetros, que o Lizard já calcula
 # =============================================================
 def medir_lizard_extra(resultado, funcoes) -> dict:
-    # O aninhamento NÃO sai daqui, apesar de o Lizard ter o campo
-    # max_nesting_depth: a extensão dele conta chaves, estilo C, e
-    # em Python devolve 0 para tudo. Conferi. O cálculo correto
-    # está em profundidade_de_aninhamento, pelo AST.
     parametros = [len(f.parameters) for f in funcoes]
 
     return {
@@ -132,10 +128,6 @@ BLOCOS_ANINHAVEIS = (ast.If, ast.For, ast.AsyncFor, ast.While,
 # Quantos blocos de controle chegam a ficar um dentro do outro
 # =============================================================
 def profundidade_de_aninhamento(no: ast.AST, nivel: int = 0) -> int:
-    # Aninhamento profundo não é o mesmo que complexidade
-    # ciclomática: dez 'if' em sequência e dez 'if' aninhados dão a
-    # mesma ciclomática, e dificuldades de leitura muito
-    # diferentes. É por isso que vale como coluna separada.
     maior = nivel
 
     for filho in ast.iter_child_nodes(no):
@@ -223,21 +215,6 @@ def medir_ruff(nome: str, codigo: str) -> dict:
         return vazio
 
     try:
-        # Bytes em UTF-8, e não texto, de propósito.
-        #
-        # Com text=True o Python codifica a entrada com a codificação
-        # do SISTEMA, que no Windows é cp1252. Código-fonte com um
-        # caractere fora dela — um emoji num comentário, um nome em
-        # chinês — quebrava a thread que escreve na entrada do ruff,
-        # e a medição daquele arquivo saía inválida. No Linux a
-        # codificação padrão já é UTF-8 e o erro não aparecia.
-        #
-        # Indo como bytes, a codificação é decidida aqui e não
-        # depende da máquina. UTF-8 é o que o ruff espera ler.
-        #
-        # errors="replace" cobre o único caso que UTF-8 não codifica:
-        # surrogate solto, que aparece quando o parquet trouxe bytes
-        # inválidos e eles foram decodificados com errors="ignore".
         processo = subprocess.run(
             ["ruff", "check", "--select", "ALL", "--ignore", "D,ANN,CPY",
              "--output-format", "concise", "--no-cache",
