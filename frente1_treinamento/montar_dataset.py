@@ -776,6 +776,17 @@ def assinatura_da_fase1() -> dict:
         "tamanho_maximo": config.TAMANHO_MAXIMO_BYTES,
         "pastas":    list(config.PASTAS_IGNORADAS),
         "arquivos":  list(config.ARQUIVOS_IGNORADOS),
+
+        # Os grupos de medição entram na assinatura: ligar o ruff
+        # ou as métricas temporais acrescenta colunas ao CSV, e
+        # misturar parciais de configurações diferentes produziria
+        # um dataset com buracos sem explicação. Com isso, cada
+        # conjunto de grupos tem a sua pasta de parciais, e voltar
+        # atrás não descarta o trabalho já feito.
+        "medidos":   sorted(
+            chave for chave, _ in features.GRUPOS_MEDIDOS
+            if getattr(config, chave, False)),
+        "janela":    config.JANELA_RECENTE_DIAS,
     }
 
 
@@ -819,6 +830,22 @@ def repositorios_pendentes() -> list[str]:
 
     return [nome for nome in registro.get("repositorios", [])
             if not (pasta / f"{nome.replace('/', '__')}.csv").exists()]
+
+
+# Sufixo dos parciais que guardam só a medição de código
+SUFIXO_CODIGO = "__codigo.csv"
+
+
+# =============================================================
+# Csvs Completos
+# -------------------------------------------------------------
+# Os parciais de repositório prontos, sem os de código
+# =============================================================
+def csvs_completos(pasta: Path) -> list[Path]:
+    # Um glob simples por "*.csv" pegaria também os parciais que
+    # têm só as colunas de código, e o dataset sairia com buracos
+    return [c for c in sorted(pasta.glob("*.csv"))
+            if not c.name.endswith(SUFIXO_CODIGO)]
 
 
 # =============================================================
@@ -1101,7 +1128,7 @@ def montar_com_os_prontos() -> pd.DataFrame:
     print(f"  destino : {config.ARQUIVO_DATASET}")
     print(f"  divisão : {divisao.descrever_divisao()}\n")
 
-    prontos = sorted(pasta.glob("*.csv"))
+    prontos = csvs_completos(pasta)
 
     if not prontos:
         raise SystemExit(
@@ -1231,7 +1258,9 @@ def montar() -> pd.DataFrame:
     partes, falharam = [], []
 
     for ordem, repositorio in enumerate(nomes, start=1):
-        parcial = pasta_parciais / f"{repositorio.replace('/', '__')}.csv"
+        base = repositorio.replace("/", "__")
+        parcial = pasta_parciais / f"{base}.csv"
+        parcial_codigo = pasta_parciais / f"{base}__codigo.csv"
 
         # O CSV pronto é o que torna o progresso durável. Uma queda
         # de energia no décimo repositório custa o décimo, não os
@@ -1246,9 +1275,10 @@ def montar() -> pd.DataFrame:
         print(f"  [{ordem}/{len(nomes)}] {repositorio:<24} ",
               end="", flush=True)
 
-        separado = pasta_separado() / f"{repositorio.replace('/', '__')}.parquet"
+        separado = pasta_separado() / f"{base}.parquet"
+        tem_codigo = parcial_codigo.exists() and not config.FORCAR_MONTAGEM
 
-        if not separado.exists():
+        if not separado.exists() and not tem_codigo:
             # A recuperação acima já tentou regravar este parquet,
             # então chegar aqui significa que o projeto não tem
             # nenhuma linha elegível nos parquets de origem
@@ -1260,7 +1290,28 @@ def montar() -> pd.DataFrame:
         # esta rede de proteção, qualquer um desses levaria embora
         # também os repositórios que ainda não foram tentados.
         try:
-            codigo = medir_codigo_do_repo(repositorio, separado)
+            # O CSV de código é gravado ANTES do clone, e por isso
+            # a parte barata nunca é refeita por causa da cara: se
+            # a máquina cair no meio do clone, a medição do código
+            # deste projeto continua valendo.
+            if tem_codigo:
+                codigo = pd.read_csv(parcial_codigo)
+                print(f"código reaproveitado ({len(codigo)}) ",
+                      end="", flush=True)
+            else:
+                codigo = medir_codigo_do_repo(repositorio, separado)
+
+                if codigo.empty:
+                    print("nenhuma linha mensurável")
+                    falharam.append(repositorio)
+                    continue
+
+                codigo.to_csv(parcial_codigo, index=False, encoding="utf-8")
+
+                # Só depois de gravado o código: a interrupção
+                # nunca cai entre medir e salvar
+                if config.APAGAR_SEPARADO:
+                    separado.unlink(missing_ok=True)
 
             if codigo.empty:
                 print("nenhuma linha mensurável")
@@ -1296,10 +1347,8 @@ def montar() -> pd.DataFrame:
         resultado.to_csv(parcial, index=False, encoding="utf-8")
         partes.append(resultado)
 
-        # Só depois do CSV gravado, para a interrupção nunca cair
-        # entre medir e salvar
-        if config.APAGAR_SEPARADO:
-            separado.unlink(missing_ok=True)
+        # O CSV completo existe, então o de código vira redundante
+        parcial_codigo.unlink(missing_ok=True)
 
     if not partes:
         raise SystemExit("Nenhum repositório processado.")

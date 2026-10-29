@@ -34,3 +34,14 @@ numpy>=2.3.2
 pandas>=2.3.3,<3
 scikit-learn>=1.7.2
 joblib>=1.4.2
+
+# ---- Mapa de calor da matriz de correlação ----
+# Usado só para gravar o PNG. O treino funciona sem ele: a
+# ausência vira um aviso, e não um erro.
+matplotlib>=3.10.0
+
+# ---- Contagens de violação por categoria ----
+# Opcional: com MEDIR_RUFF desligado o projeto funciona sem ele.
+# Escrito em Rust, processa um arquivo em milissegundos, que é o
+# que torna viável rodá-lo sobre as 137 mil linhas do dataset.
+ruff>=0.14.0

@@ -34,13 +34,29 @@ import config
 # AS COLUNAS DE CADA GRUPO
 # =============================================================
 
-COLUNAS_RAZOES = [
+COLUNAS_RAZOES_FIXAS = [
     "churn_por_revisao",     # tamanho típico de cada alteração
     "churn_por_linha",       # quanto já foi reescrito, relativo ao tamanho
     "revisoes_por_autor",    # concentração do trabalho
     "linhas_por_funcao",     # tamanho médio de função
     "fracao_maior_funcao",   # quanto a maior função domina o arquivo
 ]
+
+# Razões que dependem de grupos opcionais de medição.
+# nome da coluna -> (numerador, denominador)
+RAZOES_OPCIONAIS = {
+    # Densidade de comentário é clássica na literatura
+    "densidade_comentarios":  ("comentarios", "linhas"),
+    "tokens_por_linha":       ("tokens", "linhas"),
+    # Violações por linha, para o arquivo grande não liderar só
+    # por ser grande
+    "ruff_por_linha":         ("ruff_total", "linhas"),
+    # Quanto do churn foi crescimento e quanto foi reescrita
+    "fracao_insercoes":       ("insercoes", "churn"),
+    # Atividade recente contra atividade total
+    "fracao_commits_recentes": ("commits_recentes", "revisoes"),
+}
+
 
 COLUNAS_DESEQUILIBRIO = [
     "desequilibrio_complexidade",  # a pior função contra a média delas
@@ -95,6 +111,13 @@ def acrescentar_razoes(dados: pd.DataFrame) -> pd.DataFrame:
     dados["fracao_maior_funcao"] = dividir(dados["maior_funcao"],
                                            dados["linhas"])
 
+    # As de baixo dependem de grupos de medição que podem estar
+    # desligados, então cada uma confere se a coluna existe. Sem
+    # isso, desligar MEDIR_RUFF quebraria o cálculo das razões.
+    for nome, (a, b) in RAZOES_OPCIONAIS.items():
+        if a in dados.columns and b in dados.columns:
+            dados[nome] = dividir(dados[a], dados[b])
+
     return dados
 
 
@@ -142,6 +165,27 @@ def acrescentar_caminho(dados: pd.DataFrame) -> pd.DataFrame:
 
 
 # =============================================================
+# Colunas para Percentil
+# -------------------------------------------------------------
+# Quais medidas merecem a versão em percentil
+# =============================================================
+def colunas_para_percentil(base: list[str]) -> list[str]:
+    # Nem toda medida pede percentil. Ele existe para tirar a
+    # ESCALA do projeto, e isso só faz sentido em contagem e
+    # tamanho: 500 linhas é enorme no black e comum no cpython.
+    #
+    # Já 'fracao_autor_principal' e 'parametros_media' são razões
+    # ou médias que não crescem com o projeto, e dar percentil a
+    # elas só multiplicaria colunas redundantes. Com as 44 medidas
+    # atuais, o grupo passaria de 9 para 44 colunas e o modelo
+    # chegaria a 99 features.
+    if not config.PERCENTIL_SO_NAS_BASICAS:
+        return list(base)
+
+    return [c for c in base if c in config.COLUNAS_COM_PERCENTIL]
+
+
+# =============================================================
 # Acrescentar Percentil
 # -------------------------------------------------------------
 # A posição de cada arquivo dentro do próprio projeto
@@ -161,7 +205,7 @@ def acrescentar_percentil(dados: pd.DataFrame,
     # clona o repositório inteiro antes de julgar qualquer arquivo.
     por_repositorio = dados.groupby("repositorio")
 
-    for coluna in colunas:
+    for coluna in colunas_para_percentil(colunas):
         dados[PREFIXO_PERCENTIL + coluna] = por_repositorio[coluna].rank(
             pct=True, method="average")
 
@@ -175,7 +219,7 @@ def acrescentar_percentil(dados: pd.DataFrame,
 # =============================================================
 
 def colunas_de_percentil(base: list[str]) -> list[str]:
-    return [PREFIXO_PERCENTIL + c for c in base]
+    return [PREFIXO_PERCENTIL + c for c in colunas_para_percentil(base)]
 
 
 # Cada entrada diz como se chama a chave no config, quais colunas
@@ -183,7 +227,9 @@ def colunas_de_percentil(base: list[str]) -> list[str]:
 GRUPOS = {
     "razoes": {
         "chave":   "USAR_RAZOES",
-        "colunas": COLUNAS_RAZOES,
+        # None: as razões opcionais dependem de quais grupos de
+        # medição estão ligados, então a lista é montada na hora
+        "colunas": None,
         "funcao":  acrescentar_razoes,
     },
     "desequilibrio": {
@@ -224,6 +270,13 @@ def grupos_ligados() -> list[str]:
 def colunas_do_grupo(nome: str, base: list[str]) -> list[str]:
     if nome == "percentil":
         return colunas_de_percentil(base)
+
+    if nome == "razoes":
+        # As opcionais só existem se as duas colunas de origem
+        # foram medidas
+        opcionais = [c for c, (a, b) in RAZOES_OPCIONAIS.items()
+                     if a in base and b in base]
+        return COLUNAS_RAZOES_FIXAS + opcionais
 
     return list(GRUPOS[nome]["colunas"])
 

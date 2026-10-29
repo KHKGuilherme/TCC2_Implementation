@@ -259,10 +259,22 @@ def mostrar_importancias(modelo) -> None:
         barra = "#" * int(round(pesos[i] * 60))
         print(f"    {features.FEATURES[i]:<28} {pesos[i]:.3f}  {barra}")
 
-    peso_historico = sum(pesos[features.FEATURES.index(c)]
-                         for c in features.COLUNAS_HISTORICO)
-    print(f"\n    histórico Git (revisoes + autores + churn): "
-          f"{100 * peso_historico:.0f}% do peso total")
+    # Por ORIGEM, e não só pelas três colunas cruas de histórico.
+    #
+    # A versão antiga somava revisoes + autores + churn e chamava
+    # aquilo de "peso do histórico". Com as derivadas isso passou a
+    # mentir: 'revisoes_por_autor' é a feature mais importante do
+    # modelo e também é histórico, só que derivada. A soma antiga
+    # a ignorava e sugeria que o histórico tinha deixado de pesar.
+    por_origem = {}
+    for i, coluna in enumerate(features.FEATURES):
+        origem = features.origem_da_feature(coluna)
+        por_origem[origem] = por_origem.get(origem, 0.0) + pesos[i]
+
+    print("\n    Peso por origem da informação")
+    for origem, peso in sorted(por_origem.items(),
+                               key=lambda p: -p[1]):
+        print(f"      {origem:<22} {100 * peso:>5.1f}%")
 
 
 # =============================================================
@@ -312,10 +324,32 @@ def risco_por_arquivo(previsoes: pd.DataFrame) -> pd.DataFrame:
     # É o gabarito contra o qual a nota por arquivo é medida.
     risco["teve_defeito"] = (risco["commits_com_defeito"] > 0).astype(int)
 
-    risco["risco_medio"] = risco["risco_medio"].round(4)
-    risco["risco_maximo"] = risco["risco_maximo"].round(4)
+    # A nota que ordena o ranking.
+    #
+    # Ordenar pela média crua enche o topo de arquivos com UM
+    # retrato só. Não é coincidência: a média de uma amostra varia
+    # muito mais que a média de sete, então os extremos são
+    # ocupados por quem tem menos evidência, e não por quem tem
+    # mais risco.
+    #
+    # A correção puxa a nota para a média geral na proporção da
+    # evidência disponível:
+    #
+    #     (n * media_do_arquivo + k * media_geral) / (n + k)
+    #
+    # Com n retratos e k de peso: um arquivo com 1 retrato fica
+    # quase na média geral, e um com 20 quase não se move. É a
+    # média bayesiana usada em ranking de avaliações.
+    geral = previsoes["probabilidade"].mean()
+    k = config.PESO_DA_PRIOR
+    n = risco["retratos"]
 
-    risco = risco.sort_values("risco_medio", ascending=False,
+    risco["risco_ajustado"] = (n * risco["risco_medio"] + k * geral) / (n + k)
+
+    for coluna in ("risco_medio", "risco_maximo", "risco_ajustado"):
+        risco[coluna] = risco[coluna].round(4)
+
+    risco = risco.sort_values("risco_ajustado", ascending=False,
                               ignore_index=True)
 
     risco.to_csv(config.ARQUIVO_RISCO, index=False, encoding="utf-8")
@@ -329,25 +363,42 @@ def risco_por_arquivo(previsoes: pd.DataFrame) -> pd.DataFrame:
 # =============================================================
 def mostrar_ranking(risco: pd.DataFrame) -> None:
     y = risco["teve_defeito"].to_numpy()
-    p = risco["risco_medio"].to_numpy()
 
     print(f"\n  Por arquivo — {len(risco)} arquivos distintos, "
           f"{int(y.sum())} com defeito ({100 * y.mean():.1f}%)")
 
     if len(np.unique(y)) > 1:
-        print(f"    AUC na granularidade de arquivo: "
-              f"{roc_auc_score(y, p):.3f}")
+        # As duas, porque a diferença entre elas é o efeito do
+        # ajuste por evidência
+        print(f"    AUC por arquivo, nota crua     : "
+              f"{roc_auc_score(y, risco['risco_medio']):.3f}")
+        print(f"    AUC por arquivo, nota ajustada : "
+              f"{roc_auc_score(y, risco['risco_ajustado']):.3f}")
+
+    # Precisão no topo é a métrica que importa para uma ferramenta
+    # que ORDENA: se o desenvolvedor vai olhar os 50 primeiros, o
+    # que vale é quantos daqueles 50 têm defeito mesmo
+    print(f"\n  Precisão no topo do ranking")
+    for quantos in config.TOPOS_AVALIADOS:
+        if quantos > len(risco):
+            continue
+        acertos = int(risco["teve_defeito"].head(quantos).sum())
+        print(f"    {quantos:>5} primeiros: {acertos:>5} com defeito "
+              f"({100 * acertos / quantos:.1f}%)")
+    print(f"    {'base':>5}           : {100 * y.mean():.1f}% "
+          f"se escolhesse ao acaso")
 
     quantos = min(config.TOPO_RANKING, len(risco))
     print(f"\n  Os {quantos} arquivos mais arriscados")
-    print(f"    {'risco':>6} {'retratos':>9} {'real':>5}  arquivo")
+    print(f"    {'nota':>6} {'média':>7} {'retratos':>9} {'real':>5}  arquivo")
 
     for _, linha in risco.head(quantos).iterrows():
         marca = "sim" if linha["teve_defeito"] else "-"
         caminho = f"{linha['repositorio']}/{linha['arquivo']}"
-        if len(caminho) > 62:
-            caminho = "..." + caminho[-59:]
-        print(f"    {100 * linha['risco_medio']:>5.1f}% "
+        if len(caminho) > 54:
+            caminho = "..." + caminho[-51:]
+        print(f"    {100 * linha['risco_ajustado']:>5.1f}% "
+              f"{100 * linha['risco_medio']:>6.1f}% "
               f"{int(linha['retratos']):>9} {marca:>5}  {caminho}")
 
     print(f"\n  Tabela completa: {config.ARQUIVO_RISCO}")

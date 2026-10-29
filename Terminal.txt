@@ -1,0 +1,426 @@
+(.venv) PS D:\Code\TCC2> python frente1_treinamento/principal.py                                                                         
+==================================================================
+FRENTE 1 — TREINAMENTO DO MODELO
+==================================================================
+
+  Dataset existe mas faltam colunas: ['comentarios', 'linhas_em_branco', 'halstead_volume', 'halstead_dificuldade', 'halstead_esforco', 'halstead_bugs', 'tokens', 'parametros_maximo', 'parametros_media', 'aninhamento_maximo', 'todos_fixmes', 'except_pelado', 'qtd_try', 'qtd_imports', 'imports_estrela', 'qtd_classes', 'qtd_decoradores', 'qtd_global', 'ruff_total', 'ruff_bugbear', 'ruff_seguranca', 'ruff_excecao', 'ruff_simplificar', 'ruff_refatorar', 'ruff_argumentos', 'ruff_retorno', 'insercoes', 'remocoes', 'idade_dias', 'dias_desde_anterior', 'commits_recentes', 'autores_recentes', 'fracao_autor_principal', 'autores_menores', 'arquivos_por_commit']
+  Montando o dataset.
+
+======================================================================
+MONTAGEM DO DATASET
+======================================================================
+
+  origem  : defectors/
+  destino : dados\dataset.csv
+  escopo  : todos
+  divisão : GroupShuffleSplit por arquivo — 30% dos arquivos
+  amostra : dataset completo
+  parciais: dados\parciais\191f4dc636/
+
+----------------------------------------------------------------------
+ETAPA 1 — separar o Defectors em um parquet por repositório
+----------------------------------------------------------------------
+
+  Separação reaproveitada: 25 repositórios.
+
+----------------------------------------------------------------------
+ETAPA 2 — um repositório por vez: mede, clona, grava, apaga
+----------------------------------------------------------------------
+
+  [1/25] airflow                  
+
+  Interrompido durante o airflow.
+  Já estão gravados: 0 de 25. Rode o mesmo comando para continuar daqui.
+(.venv) PS D:\Code\TCC2> Remove-Item dados\parciais\191f4dc636\airflow*.csv -ErrorAction SilentlyContinue
+(.venv) PS D:\Code\TCC2> Copy-Item dados\dataset.csv dados\dataset_19repos_9metricas.csv
+(.venv) PS D:\Code\TCC2> python frente1_treinamento/principal.py                                         
+==================================================================
+FRENTE 1 — TREINAMENTO DO MODELO
+==================================================================
+
+  Dataset existe mas faltam colunas: ['comentarios', 'linhas_em_branco', 'halstead_volume', 'halstead_dificuldade', 'halstead_esforco', 'halstead_bugs', 'tokens', 'parametros_maximo', 'parametros_media', 'aninhamento_maximo', 'todos_fixmes', 'except_pelado', 'qtd_try', 'qtd_imports', 'imports_estrela', 'qtd_classes', 'qtd_decoradores', 'qtd_global', 'ruff_total', 'ruff_bugbear', 'ruff_seguranca', 'ruff_excecao', 'ruff_simplificar', 'ruff_refatorar', 'ruff_argumentos', 'ruff_retorno', 'insercoes', 'remocoes', 'idade_dias', 'dias_desde_anterior', 'commits_recentes', 'autores_recentes', 'fracao_autor_principal', 'autores_menores', 'arquivos_por_commit']
+  Montando o dataset.
+
+======================================================================
+MONTAGEM DO DATASET
+======================================================================
+
+  origem  : defectors/
+  destino : dados\dataset.csv
+  escopo  : todos
+  divisão : GroupShuffleSplit por arquivo — 30% dos arquivos
+  amostra : dataset completo
+  parciais: dados\parciais\191f4dc636/
+
+----------------------------------------------------------------------
+ETAPA 1 — separar o Defectors em um parquet por repositório
+----------------------------------------------------------------------
+
+  Separação reaproveitada: 25 repositórios.
+
+----------------------------------------------------------------------
+ETAPA 2 — um repositório por vez: mede, clona, grava, apaga
+----------------------------------------------------------------------
+
+  [1/25] airflow                  medidas 7833/8883 (-1050: 32 sem conteúdo, 54 sem parse, 964 sem função, 0 grandes) clonando... nenhum commit encontrado no repositório
+  [2/25] ansible                  medidas 36019/43098 (-7079: 1938 sem conteúdo, 2056 sem parse, 3073 sem função, 12 grandes) clonando... nenhum commit encontrado no repositório
+  [3/25] black                    medidas 461/475 (-14: 2 sem conteúdo, 0 sem parse, 12 sem função, 0 grandes) clonando... nenhum commit encontrado no repositório
+  [4/25] celery                   medidas 3037/3284 (-247: 17 sem conteúdo, 153 sem parse, 77 sem função, 0 grandes) clonando... nenhum commit encontrado no repositório
+  [5/25] core                     medidas 30391/33023 (-2632: 37 sem conteúdo, 125 sem parse, 2470 sem função, 0 grandes) clonando... nenhum commit encontrado no repositório
+  [6/25] cpython                  medidas 4366/7073 (-2707: 20 sem conteúdo, 2354 sem parse, 318 sem função, 15 grandes) clonando... nenhum commit encontrado no repositório
+  [7/25] django                   medidas 9541/11094 (-1553: 61 sem conteúdo, 757 sem parse, 735 sem função, 0 grandes) clonando... nenhum commit encontrado no repositório
+  [8/25] django-rest-framework    medidas 377/398 (-21: 6 sem conteúdo, 2 sem parse, 13 sem função, 0 grandes) clonando... nenhum commit encontrado no repositório
+  [9/25] freqtrade                medidas 1/1 (-0: 0 sem conteúdo, 0 sem parse, 0 sem função, 0 grandes) clonando... nenhum commit encontrado no repositório
+  [10/25] jax                      medidas 637/677 (-40: 0 sem conteúdo, 1 sem parse, 27 sem função, 12 grandes) clonando... nenhum commit encontrado no repositório
+  [11/25] lightning                medidas 9128/10025 (-897: 133 sem conteúdo, 3 sem parse, 761 sem função, 0 grandes) clonando... nenhum commit encontrado no repositório
+  [12/25] localstack               medidas 1446/1556 (-110: 6 sem conteúdo, 27 sem parse, 72 sem função, 5 grandes) clonando... nenhum commit encontrado no repositório
+  [13/25] numpy                    medidas 657/900 (-243: 10 sem conteúdo, 104 sem parse, 128 sem função, 1 grandes) clonando... nenhum commit encontrado no repositório
+  [14/25] openpilot                medidas 1206/1432 (-226: 13 sem conteúdo, 0 sem parse, 213 sem função, 0 grandes) clonando... nenhum commit encontrado no repositório
+  [15/25] pandas                   medidas 13363/15062 (-1699: 18 sem conteúdo, 404 sem parse, 478 sem função, 799 grandes) clonando... nenhum commit encontrado no repositório
+  [16/25] pipenv                   medidas 90/106 (-16: 0 sem conteúdo, 0 sem parse, 16 sem função, 0 grandes) clonando... nenhum commit encontrado no repositório
+  [17/25] poetry                   medidas 1756/2025 (-269: 157 sem conteúdo, 0 sem parse, 112 sem função, 0 grandes) clonando... nenhum commit encontrado no repositório
+  [18/25] ray                      medidas 14591/15850 (-1259: 168 sem conteúdo, 64 sem parse, 1027 sem função, 0 grandes) clonando... nenhum commit encontrado no repositório
+  [19/25] redash                   medidas 605/717 (-112: 1 sem conteúdo, 81 sem parse, 30 sem função, 0 grandes) clonando... nenhum commit encontrado no repositório
+  [20/25] scikit-learn             medidas 3779/4120 (-341: 14 sem conteúdo, 168 sem parse, 159 sem função, 0 grandes) clonando... nenhum commit encontrado no repositório
+  [21/25] scrapy                   medidas 350/404 (-54: 5 sem conteúdo, 13 sem parse, 36 sem função, 0 grandes) clonando... nenhum commit encontrado no repositório
+  ..... 2891s 31454 linhas (0 sem histórico)1454/35577 (-4123: 499 sem conteúdo, 530 sem parse, 3089 sem função, 5 grandes) clonando... 14226/14226 commits .....
+  [23/25] spaCy                    medidas 1641/2225 (-584: 8 sem conteúdo, 19 sem parse, 547 sem função, 10 grandes) clonando... 854/854 commits .......... 1124s 1641 linhas (0 sem histórico)
+  [24/25] transformers             medidas 1132/1249 (-117: 0 sem conteúdo, 9 sem parse, 108 sem função, 0 grandes) clonando... 287/287 commits .......... 900s 1132 linhas (0 sem histórico)
+  [25/25] yolov5                   medidas 1033/1058 (-25: 1 sem conteúdo, 0 sem parse, 24 sem função, 0 grandes) clonando... 532/532 commits .......... 200s 1033 linhas (0 sem histórico)
+
+======================================================================
+DATASET GRAVADO: dados\dataset.csv
+======================================================================
+
+  35260 linhas, 51 colunas
+  4 repositórios, 15899 commits
+  13337 defeituosos (37.8%)
+  45898 segundos, 8.7 MB
+
+  não processados (21): airflow, ansible, black, celery, core, cpython, django, django-rest-framework, freqtrade, jax, lightning, localstack, numpy, openpilot, pandas, pipenv, poetry, ray, redash, scikit-learn, scrapy
+  Eles não têm CSV, então basta rodar o mesmo comando de novo para tentar só eles.
+
+  Divisão (GroupShuffleSplit por arquivo — 30% dos arquivos):
+    teste      10241 linhas,   3748 defeituosos (36.6%), 4 repositórios
+    treino     25019 linhas,   9589 defeituosos (38.3%), 4 repositórios
+
+  Por repositório:
+    repositório                       linhas  %defeito  rev.méd  partições
+    sentry                             31454     36.7%     72.6  teste/treino
+    spaCy                               1641     56.2%     83.0  teste/treino
+    transformers                        1132     26.0%     60.3  teste/treino
+    yolov5                              1033     54.9%    103.5  teste/treino
+
+
+
+----------------------------------------------------------------------
+PRÉ-PROCESSAMENTO
+----------------------------------------------------------------------
+
+  Descartadas por faltar mais de 38 das 76 features:
+    treino : 0 de 25019
+    teste  : 0 de 10241
+
+  Valores preenchidos com a média do treino:
+    treino : 0
+    teste  : 0
+
+  Constantes no treino, sem poder informativo: eh_teste
+    nenhum buraco: o preenchimento não alterou nada
+======================================================================
+TREINAMENTO
+======================================================================
+
+  dataset  : dados\dataset.csv
+  features : 44 medidas + 32 derivadas
+  derivadas: razoes (10), desequilibrio (2), caminho (4), percentil (16)
+  balanceamento: desligado — o treino mantém a proporção original
+  divisão  : GroupShuffleSplit por arquivo — 30% dos arquivos
+  treino   : 25019 linhas, 4 repositórios, 9589 defeituosos
+  teste    : 10241 linhas, 4 repositórios, 3748 defeituosos
+
+----------------------------------------------------------------------
+CORRELAÇÃO ENTRE AS MÉTRICAS
+----------------------------------------------------------------------
+
+  Correlação de Spearman com 'defeituoso'
+    ruff_por_linha                -0.118  ######
+    fracao_autor_principal        -0.101  #####
+    revisoes_por_autor            -0.099  #####
+    pct_ruff_total                -0.087  ####
+    ruff_total                    -0.081  ####
+    autores_recentes              +0.080  ####
+    profundidade                  +0.078  ####
+    fracao_maior_funcao           +0.074  ####
+    parametros_media              +0.070  ###
+    maior_funcao                  +0.064  ###
+    pct_maior_funcao              +0.063  ###
+    churn_por_revisao             +0.058  ###
+    arquivos_por_commit           +0.057  ###
+    parametros_maximo             +0.055  ###
+    aninhamento_maximo            +0.054  ###
+    complexidade_maxima           +0.052  ###
+    qtd_imports                   +0.051  ###
+    ruff_bugbear                  +0.046  ##
+    ruff_refatorar                +0.044  ##
+    autores                       +0.043  ##
+    complexidade_media            +0.043  ##
+    linhas_por_funcao             -0.043  ##
+    ruff_argumentos               -0.043  ##
+    imports_estrela               -0.042  ##
+    pct_qtd_funcoes               +0.040  ##
+    pct_autores                   +0.040  ##
+    pct_tokens                    -0.040  ##
+    qtd_classes                   +0.039  ##
+    pct_complexidade_maxima       +0.039  ##
+    qtd_funcoes                   +0.039  ##
+    comprimento_do_caminho        +0.039  ##
+    pct_insercoes                 -0.039  ##
+    pct_churn                     -0.038  ##
+    pct_aninhamento_maximo        +0.038  ##
+    complexidade_por_linha        -0.036  ##
+    manutenibilidade              -0.036  ##
+    pct_linhas                    -0.036  ##
+    pct_revisoes                  -0.035  ##
+    desequilibrio_complexidade    +0.035  ##
+    pct_commits_recentes          -0.035  ##
+    ruff_seguranca                -0.034  ##
+    insercoes                     -0.034  ##
+    dias_desde_anterior           +0.033  ##
+    linhas                        -0.033  ##
+    pct_complexidade_media        +0.032  ##
+    churn                         -0.031  ##
+    tokens                        -0.031  ##
+    ruff_excecao                  +0.031  ##
+    halstead_dificuldade          +0.030  #
+    halstead_esforco              +0.028  #
+    halstead_bugs                 +0.027  #
+    halstead_volume               +0.027  #
+    pct_manutenibilidade          -0.027  #
+    revisoes                      -0.025  #
+    pct_remocoes                  -0.023  #
+    ruff_simplificar              -0.023  #
+    fracao_commits_recentes       +0.023  #
+    except_pelado                 -0.021  #
+    eh_init                       -0.021  #
+    idade_dias                    -0.021  #
+    qtd_decoradores               +0.019  #
+    commits_recentes              -0.019  #
+    ruff_retorno                  +0.017  #
+    densidade_comentarios         +0.017  #
+    qtd_global                    -0.015  #
+    remocoes                      -0.014  #
+    autores_menores               -0.013  #
+    qtd_try                       +0.011  #
+    pct_halstead_volume           +0.011  #
+    churn_por_linha               -0.010  
+    todos_fixmes                  -0.005  
+    fracao_insercoes              +0.005  
+    tokens_por_linha              +0.004  
+    comentarios                   +0.001  
+    linhas_em_branco              -0.000  
+    eh_teste                           —  (constante no treino)
+
+  Pares de features com |correlação| >= 0.8 (15 de 127)
+    halstead_volume              halstead_bugs                 +1.000
+    halstead_volume              halstead_esforco              +0.996
+    halstead_esforco             halstead_bugs                 +0.996
+    churn                        insercoes                     +0.995
+    pct_churn                    pct_insercoes                 +0.995
+    revisoes                     pct_revisoes                  +0.987
+    complexidade_media           pct_complexidade_media        +0.986
+    pct_linhas                   pct_tokens                    +0.985
+    halstead_dificuldade         halstead_esforco              +0.985
+    autores                      pct_autores                   +0.985
+    remocoes                     pct_remocoes                  +0.984
+    linhas                       tokens                        +0.983
+    qtd_funcoes                  pct_qtd_funcoes               +0.982
+    maior_funcao                 pct_maior_funcao              +0.980
+    linhas                       pct_linhas                    +0.978
+    Elas carregam informação parecida, então a importância se divide entre elas.
+
+  Matriz de Spearman: dados\correlacao_spearman.csv
+  Matriz de Pearson : dados\correlacao_pearson.csv
+  Mapa de calor     : dados\mapa_de_calor.png
+
+  Validação: GroupKFold por arquivo — 5 dobras
+
+  Comparação dentro do treino
+                                 AUC      F1     MCC  Precisão  Revocação
+    Regressão Logística        0.619   0.550   0.184     0.462      0.681
+    Random Forest              0.680   0.582   0.250     0.493      0.709
+    Gradient Boosting          0.676   0.340   0.181     0.587      0.239
+    referência: só linhas      0.517   0.460   0.031     0.397      0.547
+
+    Melhor por AUC: Random Forest
+
+  Contribuição de cada grupo de features
+                                       AUC
+    só 'linhas'                      0.517
+    só 'revisoes'                    0.520
+    só código (6)                    0.545
+    só histórico (3)                 0.603
+    medidas (44)                     0.675
+    medidas + razoes (+10)           0.681
+    medidas + desequilibrio (+2)     0.674
+    medidas + caminho (+4)           0.681
+    medidas + percentil (+16)        0.675
+    tudo (76)                        0.680
+
+  Importância das features (contribuição nas árvores)
+    fracao_autor_principal       0.061  ####
+    revisoes_por_autor           0.049  ###
+    ruff_por_linha               0.049  ###
+    dias_desde_anterior          0.041  ##
+    arquivos_por_commit          0.037  ##
+    idade_dias                   0.029  ##
+    churn_por_revisao            0.029  ##
+    comprimento_do_caminho       0.028  ##
+    ruff_total                   0.025  #
+    pct_ruff_total               0.024  #
+    pct_revisoes                 0.022  #
+    tokens_por_linha             0.022  #
+    fracao_maior_funcao          0.019  #
+    densidade_comentarios        0.018  #
+    linhas_por_funcao            0.017  #
+    pct_commits_recentes         0.017  #
+    churn_por_linha              0.017  #
+    revisoes                     0.017  #
+    qtd_imports                  0.015  #
+    fracao_insercoes             0.014  #
+    autores_recentes             0.014  #
+    fracao_commits_recentes      0.014  #
+    pct_remocoes                 0.014  #
+    pct_tokens                   0.013  #
+    parametros_media             0.013  #
+    pct_autores                  0.013  #
+    tokens                       0.013  #
+    comentarios                  0.013  #
+    linhas                       0.013  #
+    pct_linhas                   0.012  #
+    remocoes                     0.012  #
+    pct_maior_funcao             0.011  #
+    autores                      0.011  #
+    complexidade_por_linha       0.011  #
+    commits_recentes             0.011  #
+    pct_insercoes                0.011  #
+    profundidade                 0.011  #
+    halstead_esforco             0.011  #
+    churn                        0.010  #
+    pct_churn                    0.010  #
+    qtd_decoradores              0.010  #
+    halstead_dificuldade         0.010  #
+    halstead_volume              0.010  #
+    pct_halstead_volume          0.010  #
+    maior_funcao                 0.010  #
+    insercoes                    0.010  #
+    desequilibrio_complexidade   0.009  #
+    manutenibilidade             0.009  #
+    linhas_em_branco             0.009  #
+    complexidade_media           0.009  #
+    pct_manutenibilidade         0.009  #
+    halstead_bugs                0.009  #
+    pct_complexidade_media       0.008  
+    pct_qtd_funcoes              0.008  
+    qtd_classes                  0.008  
+    parametros_maximo            0.007  
+    autores_menores              0.006  
+    pct_complexidade_maxima      0.006  
+    qtd_funcoes                  0.006  
+    qtd_try                      0.005  
+    ruff_argumentos              0.005  
+    complexidade_maxima          0.005  
+    ruff_seguranca               0.005  
+    ruff_refatorar               0.004  
+    aninhamento_maximo           0.004  
+    pct_aninhamento_maximo       0.004  
+    ruff_bugbear                 0.003  
+    ruff_retorno                 0.003  
+    ruff_excecao                 0.003  
+    todos_fixmes                 0.003  
+    ruff_simplificar             0.002  
+    except_pelado                0.000  
+    eh_init                      0.000  
+    imports_estrela              0.000  
+    qtd_global                   0.000  
+    eh_teste                     0.000  
+
+    Peso por origem da informação
+      histórico Git           46.9%
+      código                  40.7%
+      misto                    8.5%
+      caminho                  3.9%
+
+======================================================================
+AVALIAÇÃO FINAL — conjunto reservado
+======================================================================
+
+  reserva : GroupShuffleSplit por arquivo — 30% dos arquivos
+  10241 linhas de 4 repositórios
+  3748 defeituosos (36.6%)
+
+  Resultado
+                                 AUC      F1     MCC  Precisão  Revocação
+    modelo                     0.694   0.573   0.257     0.479      0.713
+
+  Contagens (limiar 0.5)
+    defeitos encontrados     : 2671 de 3748
+    defeitos que escaparam   : 1077
+    alarmes falsos           : 2903
+    limpos classificados ok  : 3590
+
+  Por repositório
+    repositório                       linhas  defeitos     AUC  achados
+    sentry                              9213      3284   0.694     2360
+    spaCy                                518       286   0.720      201
+    transformers                         355        98   0.670       35
+    yolov5                               155        80   0.611       75
+
+  Por arquivo — 1220 arquivos distintos, 683 com defeito (56.0%)
+    AUC por arquivo, nota crua     : 0.746
+    AUC por arquivo, nota ajustada : 0.781
+
+  Precisão no topo do ranking
+       10 primeiros:    10 com defeito (100.0%)
+       50 primeiros:    50 com defeito (100.0%)
+      100 primeiros:    98 com defeito (98.0%)
+      500 primeiros:   405 com defeito (81.0%)
+     base           : 56.0% se escolhesse ao acaso
+
+  Os 20 arquivos mais arriscados
+      nota   média  retratos  real  arquivo
+     62.1%   63.7%        45   sim  sentry/src/sentry/snuba/sessions.py
+     61.4%   64.4%        22   sim  spaCy/spacy/pipeline/entityruler.py
+     60.8%   63.6%        23   sim  spaCy/spacy/cli/pretrain.py
+     60.6%   65.5%        13   sim  sentry/src/sentry_plugins/splunk/plugin.py
+     60.5%   65.3%        13   sim  sentry/src/sentry/integrations/gitlab/issues.py
+     59.3%   61.4%        27   sim  .../sentry/api/serializers/rest_framework/dashboard.py
+     59.2%   63.1%        14   sim  ...ry/src/sentry/sentry_metrics/indexer/postgres_v2.py
+     59.1%   60.2%        47   sim  sentry/src/sentry/api/helpers/group_index.py
+     59.1%   60.8%        32   sim  sentry/src/sentry/notifications/utils/participants.py
+     59.0%   60.0%        58   sim  sentry/src/sentry/incidents/endpoints/serializers.py
+     59.0%   64.4%        10   sim  sentry/src/sentry/api/bases/external_actor.py
+     58.9%   60.6%        32   sim  sentry/src/sentry/integrations/slack/notifications.py
+     58.9%   60.1%        43   sim  ...c/sentry/api/endpoints/organization_events_stats.py
+     58.8%   61.4%        20   sim  sentry/src/sentry/data_export/endpoints/data_export.py
+     58.8%   62.3%        15   sim  ...ry/replays/consumers/recording/process_recording.py
+     58.7%   64.0%        10   sim  sentry/src/sentry/integrations/jira/issue_hook.py
+     58.5%   59.7%        45   sim  sentry/src/sentry/tasks/unmerge.py
+     58.5%   65.0%         8   sim  sentry/src/sentry_plugins/asana/plugin.py
+     58.2%   58.8%        91   sim  sentry/src/sentry/integrations/jira/integration.py
+     58.2%   60.0%        28   sim  sentry/src/sentry/api/serializers/models/incident.py
+
+  Tabela completa: dados\risco_por_arquivo.csv
+  Previsão de cada retrato: dados\previsoes.csv
+
+  Modelo gravado: modelos\modelo.joblib (Random Forest, 4.7 MB)
+
+----------------------------------------------------------------------
+GRÁFICOS DO MODELO
+----------------------------------------------------------------------
+
+    peso declarado : dados\grafico_importancia.png
+    árvore         : dados\grafico_arvore.png
+    permutação     : dados\grafico_permutacao.png      
+
+  377 segundos

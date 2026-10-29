@@ -271,6 +271,66 @@ ARQUIVOS_IGNORADOS = (
 
 
 # =============================================================
+# GRUPOS DE MÉTRICAS MEDIDAS
+# =============================================================
+
+# Ligar ou desligar qualquer um destes MUDA O DATASET, porque são
+# colunas gravadas no CSV. A montagem detecta a mudança pela
+# assinatura e usa uma pasta de parciais própria, então nada se
+# mistura — mas a medição tem de ser refeita.
+#
+# As de código custam uma releitura dos parquets: minutos.
+# As de histórico custam reclonar os repositórios: horas.
+
+# --- Código: saem do próprio arquivo, sem clone ---
+
+# Comentários e linhas em branco, do radon.raw
+MEDIR_COMENTARIOS = True
+
+# Volume, dificuldade e esforço de Halstead. Baratas, mas muito
+# correlacionadas com tamanho: espere pouco.
+MEDIR_HALSTEAD = True
+
+# Tokens e número de parâmetros, do Lizard
+MEDIR_LIZARD_EXTRA = True
+
+# Aninhamento, TODO/FIXME, except pelado, imports e classes.
+# Sai da árvore sintática, sem dependência nova.
+MEDIR_AST = True
+
+# Contagens de violação por categoria do ruff.
+#
+# Exige `pip install ruff`. Se ele não estiver instalado, as
+# colunas ficam vazias e um aviso aparece — a montagem não quebra.
+#
+# Custa cerca de 8 ms por arquivo distinto. No dataset completo
+# são uns 15 minutos, e bem menos na prática porque o mesmo
+# conteúdo aparece em vários commits e fica em cache.
+MEDIR_RUFF = True
+
+# --- Histórico: exigem clonar o repositório ---
+
+# Inserções e remoções separadas, idade do arquivo, intervalo
+# entre mudanças e atividade na janela recente.
+#
+# A literatura é consistente: atividade RECENTE prevê melhor que
+# atividade acumulada. O churn total de um arquivo de 10 anos diz
+# pouco; o churn dos últimos meses diz muito.
+MEDIR_TEMPORAL = True
+
+# Concentração do trabalho entre os autores (Bird et al., "Don't
+# touch my code!"): arquivo com muitos contribuidores ocasionais
+# tem mais defeito que arquivo com dono claro.
+MEDIR_PROPRIEDADE = True
+
+# Tamanho da janela de "atividade recente", em dias
+JANELA_RECENTE_DIAS = 90
+
+# Abaixo desta fração das mudanças, o autor conta como ocasional
+FRACAO_AUTOR_MENOR = 0.05
+
+
+# =============================================================
 # FEATURES DERIVADAS
 # =============================================================
 
@@ -291,6 +351,21 @@ USAR_RAZOES = True
 USAR_DESEQUILIBRIO = True
 USAR_PERCENTIL = True
 USAR_CAMINHO = True
+
+# O percentil existe para tirar a ESCALA do projeto, e isso só faz
+# sentido em contagem e tamanho. Dar percentil a tudo levaria o
+# modelo a 99 features, a maioria redundante.
+#
+# Desligue para gerar percentil de todas as medidas.
+PERCENTIL_SO_NAS_BASICAS = True
+
+COLUNAS_COM_PERCENTIL = (
+    "linhas", "complexidade_media", "complexidade_maxima",
+    "manutenibilidade", "maior_funcao", "qtd_funcoes",
+    "revisoes", "autores", "churn",
+    "tokens", "halstead_volume", "aninhamento_maximo",
+    "insercoes", "remocoes", "commits_recentes", "ruff_total",
+)
 
 
 # =============================================================
@@ -394,6 +469,24 @@ REPETICOES_PERMUTACAO = 5
 # Quantos arquivos aparecem no ranking de risco impresso na tela.
 # O arquivo completo é gravado em ARQUIVO_RISCO de qualquer jeito.
 TOPO_RANKING = 20
+
+# Peso da média geral na nota de cada arquivo.
+#
+# Um arquivo entra no dataset uma vez por commit que o alterou, e
+# a nota dele é a média dessas probabilidades. Sem correção, o
+# topo do ranking enche de arquivos com UM retrato só: a média de
+# uma amostra varia muito mais que a de sete, então os extremos
+# são ocupados por quem tem menos evidência.
+#
+# Este k equivale a "quantos retratos de credibilidade a média
+# geral vale". Com 5, um arquivo de 1 retrato fica perto da média
+# geral e um de 20 quase não se move.
+PESO_DA_PRIOR = 5
+
+# Tamanhos de topo avaliados. Para uma ferramenta que ORDENA
+# arquivos, a precisão nos N primeiros é mais honesta que F1 num
+# limiar fixo: é o que o desenvolvedor vive se olhar só os N.
+TOPOS_AVALIADOS = (10, 50, 100, 500)
 
 
 # =============================================================
