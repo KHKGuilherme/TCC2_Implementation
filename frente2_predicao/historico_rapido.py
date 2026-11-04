@@ -23,6 +23,7 @@ em psf/black e psf/requests.
 """
 
 import subprocess
+import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -32,6 +33,7 @@ from pydriller.domain.commit import ModificationType
 # Separador de commit escolhido para não aparecer em caminho nem
 # em e-mail
 MARCA = "\x01"
+MARCA_EM_BYTES = MARCA.encode("ascii")
 
 
 @dataclass
@@ -66,6 +68,18 @@ def contar_commits(pasta: Path) -> int:
                             "--count", "HEAD"],
                            capture_output=True, text=True, check=True)
     return int(saida.stdout.strip())
+
+
+# =============================================================
+# Listar Commits
+# -------------------------------------------------------------
+# Os hashes na mesma ordem da travessia, do mais antigo ao novo
+# =============================================================
+def listar_commits(pasta: Path) -> list[str]:
+    saida = subprocess.run(["git", "-C", str(pasta), "rev-list",
+                            "--reverse", "HEAD"],
+                           capture_output=True, text=True, check=True)
+    return saida.stdout.split()
 
 
 # =============================================================
@@ -158,7 +172,11 @@ def mapa_de_trocas(pasta: Path) -> dict[str, set[str]]:
 # -------------------------------------------------------------
 # Gera os commits do mais antigo ao mais novo
 # =============================================================
-def percorrer_commits(pasta: Path):
+def percorrer_commits(pasta: Path, hashes: list[str] | None = None,
+                      trocas: dict[str, set[str]] | None = None):
+    # Com 'hashes', lê exatamente esses commits, nessa ordem. É o que
+    # permite retomar uma travessia: 'antigo..HEAD' não serve, porque
+    # numa história com ramos paralelos repetiria commits já lidos.
     comando = [
         "git", "-C", str(pasta),
         # Caminho com acento sai como texto, e não como "\303\251"
@@ -175,35 +193,63 @@ def percorrer_commits(pasta: Path):
         f"--format={MARCA}%H%x00%ct%x00%ae",
     ]
 
-    trocas = mapa_de_trocas(pasta)
+    if trocas is None:
+        trocas = mapa_de_trocas(pasta)
 
-    processo = subprocess.Popen(comando, stdout=subprocess.PIPE,
+    # Um arquivo e não um pipe: são até centenas de milhares de
+    # hashes, e o git só começa a escrever depois de ler todos
+    entrada = subprocess.DEVNULL
+    if hashes is not None:
+        comando.remove("--reverse")
+        comando += ["--no-walk=unsorted", "--stdin"]
+        entrada = tempfile.TemporaryFile()
+        entrada.write("\n".join(hashes).encode("ascii") + b"\n")
+        entrada.seek(0)
+
+    processo = subprocess.Popen(comando, stdin=entrada,
+                                stdout=subprocess.PIPE,
                                 stderr=subprocess.DEVNULL)
-    pendente = ""
+    pendente = b""
 
-    # Lido em blocos para um repositório de 30 mil commits não
-    # precisar caber inteiro na memória
-    while True:
-        bloco = processo.stdout.read(1 << 20)
-        if not bloco:
-            break
+    # Quem consome pode parar antes do fim. O finally encerra o git
+    # nesse caso, porque no Windows um processo vivo prende a pasta
+    # do clone e impede a exclusão.
+    try:
+        # Lido em blocos para um repositório de 30 mil commits não
+        # precisar caber inteiro na memória. O corte é feito em bytes,
+        # antes de decodificar: a divisa de um bloco pode cair no meio
+        # de uma letra acentuada.
+        while True:
+            bloco = processo.stdout.read(1 << 20)
+            if not bloco:
+                break
 
-        pendente += bloco.decode("utf-8", errors="replace")
-        trechos = pendente.split(MARCA)
-        pendente = trechos.pop()
+            pendente += bloco
+            trechos = pendente.split(MARCA_EM_BYTES)
+            pendente = trechos.pop()
 
-        for trecho in trechos:
-            commit = montar_commit(trecho, trocas)
-            if commit is not None:
-                yield commit
+            for trecho in trechos:
+                commit = montar_commit(trecho.decode("utf-8", "replace"),
+                                       trocas)
+                if commit is not None:
+                    yield commit
 
-    commit = montar_commit(pendente, trocas)
-    if commit is not None:
-        yield commit
+        commit = montar_commit(pendente.decode("utf-8", "replace"), trocas)
+        if commit is not None:
+            yield commit
 
-    processo.wait()
-    if processo.returncode != 0:
-        raise RuntimeError("o git log falhou ao ler o histórico")
+        processo.wait()
+        if processo.returncode != 0:
+            raise RuntimeError("o git log falhou ao ler o histórico")
+    finally:
+        if processo.poll() is None:
+            processo.kill()
+            processo.wait()
+
+        processo.stdout.close()
+
+        if hashes is not None:
+            entrada.close()
 
 
 # =============================================================

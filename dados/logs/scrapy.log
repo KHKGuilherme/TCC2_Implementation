@@ -1,0 +1,25 @@
+======================================================================
+MONTAGEM DO DATASET
+======================================================================
+
+  origem  : defectors/
+  destino : dados\dataset.csv
+  escopo  : todos
+  divisão : GroupShuffleSplit por arquivo — 30% dos arquivos
+  amostra : dataset completo
+  parciais: dados\parciais\191f4dc636/
+
+----------------------------------------------------------------------
+ETAPA 1 — separar o Defectors em um parquet por repositório
+----------------------------------------------------------------------
+
+  Separação reaproveitada: 25 repositórios.
+
+----------------------------------------------------------------------
+ETAPA 2 — um repositório por vez: mede, clona, grava, apaga
+----------------------------------------------------------------------
+
+  [21/25] scrapy                   código reaproveitado (350) clonando... 153/153 commits .......... 3s 350 linhas (0 sem histórico)
+
+  scrapy concluído em 9 segundos.
+

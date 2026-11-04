@@ -81,6 +81,26 @@ APAGAR_CLONES = True
 # que já tem. O relatório continua dizendo quais ficaram de fora.
 EXIGIR_TODOS_OS_REPOSITORIOS = True
 
+# Repositórios que a montagem não processa, sem que isso conte como
+# falha. Fica fora da assinatura da fase 1 de propósito: mudar esta
+# lista não troca a pasta de parciais, ao contrário de
+# REPOSITORIOS_INCLUIDOS.
+#
+# openpilot: nenhum dos 582 commits do Defectors é alcançável a
+# partir das referências de um clone completo.
+REPOSITORIOS_PULADOS = ("openpilot",)
+
+# Quando True, a Frente 1 percorre o histórico com o 'git log' de
+# frente2_predicao/historico_rapido.py, retomável no meio do
+# repositório. Quando False, usa o PyDriller, que é mais lento e
+# recomeça do zero a cada queda. As duas opções dão o mesmo resultado
+# (testes/comparar_historico.py), por isso a chave fica fora da
+# assinatura da fase 1.
+HISTORICO_RAPIDO = True
+
+# De quantos em quantos segundos a travessia grava o ponto de retomada
+SEGUNDOS_ENTRE_PONTOS = 120
+
 # Quando True, o parquet separado de cada repositório é apagado
 # depois que o CSV daquele projeto está gravado.
 #

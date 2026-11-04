@@ -21,15 +21,19 @@ nove que já terminaram.
 
 CMD -> python frente1_treinamento/montar_dataset.py
        --listar             mostra os repositórios e os nomes exatos
+       --repo NOME          processa só este repositório e grava o CSV dele
        --so-prontos         grava o dataset com os projetos já feitos
        --amostra N          monta só N linhas, sem gravar cópia
        --extrair-amostra N  grava em disco uma cópia reduzida
 """
 
 import argparse
+import gc
 import hashlib
 import json
+import os
 import shutil
+import stat
 import subprocess
 import sys
 import time
@@ -46,6 +50,7 @@ sys.path.insert(0, str(AQUI))
 
 import config
 import divisao
+import historico_retomavel
 from extrator import features, metricas_codigo, metricas_historico
 
 
@@ -645,7 +650,7 @@ def separar_por_repositorio(apenas: set[str] | None = None) -> list[str]:
                 "REPOSITORIOS_INCLUIDOS no config.py."
             )
 
-    shutil.rmtree(pasta, ignore_errors=True)
+    apagar_pasta(pasta)
 
     nomes, contagem = escrever_separados(parquets, chaves_desejadas, None)
 
@@ -829,7 +834,8 @@ def repositorios_pendentes() -> list[str]:
     pasta = pasta_de_trabalho()
 
     return [nome for nome in registro.get("repositorios", [])
-            if not (pasta / f"{nome.replace('/', '__')}.csv").exists()]
+            if nome not in config.REPOSITORIOS_PULADOS
+            and not (pasta / f"{nome.replace('/', '__')}.csv").exists()]
 
 
 # Sufixo dos parciais que guardam só a medição de código
@@ -870,13 +876,77 @@ def resumo_do_erro(erro: Exception) -> str:
 
 
 # =============================================================
+# Apagar Pasta
+# -------------------------------------------------------------
+# Apaga uma pasta inteira e avisa quando não consegue
+# =============================================================
+def apagar_pasta(pasta: Path) -> bool:
+    # No Windows o git grava os objetos como somente leitura, e o
+    # rmtree comum apaga metade e desiste. Aqui cada arquivo
+    # recusado perde a marca e é apagado de novo.
+    def liberar(funcao, caminho, _erro):
+        try:
+            Path(caminho).chmod(stat.S_IWRITE)
+            funcao(caminho)
+        except OSError:
+            pass
+
+    # Logo depois do PyDriller a pasta vazia ainda pode estar presa
+    # por um instante, então a exclusão é repetida com uma espera
+    for espera in (0, 1, 2, 4):
+        if not pasta.exists():
+            return True
+
+        time.sleep(espera)
+        gc.collect()
+        shutil.rmtree(pasta, onexc=liberar)
+
+    if pasta.exists():
+        print(f"\n      AVISO: não foi possível apagar {pasta}")
+        return False
+
+    return True
+
+
+# =============================================================
+# Clone Valido
+# -------------------------------------------------------------
+# Confere se a pasta é um repositório git próprio e com commits
+# =============================================================
+def clone_valido(pasta: Path) -> bool:
+    if not (pasta / ".git").exists():
+        return False
+
+    # Só existir um .git não prova nada, e só 'rev-parse HEAD'
+    # também não: sem um .git inteiro o git sobe de pasta, encontra
+    # o repositório do próprio TCC e responde com o HEAD dele. Por
+    # isso a resposta precisa dizer que o repositório é este aqui.
+    resultado = subprocess.run(
+        ["git", "-C", str(pasta), "rev-parse",
+         "--absolute-git-dir", "--verify", "HEAD"],
+        capture_output=True, text=True, timeout=60,
+    )
+
+    if resultado.returncode != 0:
+        return False
+
+    linhas = resultado.stdout.splitlines()
+    return bool(linhas) and Path(linhas[0]) == (pasta / ".git").resolve()
+
+
+# =============================================================
 # Clonar
 # -------------------------------------------------------------
 # Baixa um repositório com o histórico completo
 # =============================================================
 def clonar(repositorio: str, destino: Path) -> bool:
-    if (destino / ".git").exists():
+    if clone_valido(destino):
         return True
+
+    if destino.exists():
+        print("clone inválido, apagando... ", end="", flush=True)
+        if not apagar_pasta(destino):
+            return False
 
     # O dataset guarda 'celery', e o GitHub precisa de
     # 'celery/celery'
@@ -928,9 +998,9 @@ def clonar(repositorio: str, destino: Path) -> bool:
         if tentativa == 1:
             print("falhou, limpando e tentando de novo... ",
                   end="", flush=True)
-            shutil.rmtree(destino, ignore_errors=True)
+            apagar_pasta(destino)
 
-    print(f"falha: {resultado.stderr.strip()[:200]}")
+    print(f"falha do git: {resultado.stderr.strip()[-300:]}")
     return False
 
 
@@ -951,6 +1021,9 @@ def resolver_commits(pasta: Path, hashes: list[str]) -> dict[str, str]:
         capture_output=True, text=True, timeout=600,
     )
 
+    if resultado.returncode != 0:
+        raise RuntimeError(resultado.stderr.strip()[-300:])
+
     mapa = {}
     for informado, linha in zip(hashes, resultado.stdout.splitlines()):
         partes = linha.split()
@@ -960,6 +1033,30 @@ def resolver_commits(pasta: Path, hashes: list[str]) -> dict[str, str]:
             mapa[informado] = partes[0]
 
     return mapa
+
+
+# =============================================================
+# Arquivo do Ponto
+# -------------------------------------------------------------
+# Onde fica o ponto de retomada da travessia de um repositório
+# =============================================================
+def arquivo_do_ponto(repositorio: str) -> Path:
+    base = repositorio.replace("/", "__")
+    return pasta_de_trabalho() / f"{base}__ponto.pkl"
+
+
+# =============================================================
+# Gravar Csv Atomico
+# -------------------------------------------------------------
+# Grava de modo que o CSV nunca exista pela metade
+# =============================================================
+def gravar_csv_atomico(tabela: pd.DataFrame, destino: Path) -> None:
+    # A existência do CSV é o que marca o repositório como pronto.
+    # Um reinício no meio da gravação direta deixaria um arquivo
+    # truncado que a rodada seguinte aceitaria como completo.
+    temporario = destino.with_name(destino.name + ".tmp")
+    tabela.to_csv(temporario, index=False, encoding="utf-8")
+    os.replace(temporario, destino)
 
 
 # =============================================================
@@ -979,18 +1076,25 @@ def medir_historico_do_repo(repositorio: str,
     #
     # Isso acontece quando a máquina morre no meio da gravação do
     # clone. O dano é local, então apagar e clonar de novo resolve.
-    # Como 'clonar' reaproveita a pasta se o .git existir, apagar
-    # antes é o que força o clone novo.
+    # Como 'clonar' reaproveita um clone válido, apagar antes é o
+    # que força o clone novo. Repositório que falha não deixa pasta
+    # para trás: o disco é limitado, e a próxima rodada clona de novo.
     for tentativa in (1, 2):
         # Sem o nome: quem chama já o imprimiu
         print("clonando... " if tentativa == 1 else "clonando de novo... ",
               end="", flush=True)
 
         if not clonar(repositorio, pasta):
+            apagar_pasta(pasta)
             return None
 
         try:
-            return medir_historico_do_clone(repositorio, pasta, tabela)
+            resultado = medir_historico_do_clone(repositorio, pasta, tabela)
+
+            if resultado is None:
+                apagar_pasta(pasta)
+
+            return resultado
         except Exception as erro:
             resumo = resumo_do_erro(erro)
 
@@ -998,11 +1102,11 @@ def medir_historico_do_repo(repositorio: str,
                 print(f"\n      falhou: {resumo}")
                 print("      apagando o clone danificado  ",
                       end="", flush=True)
-                shutil.rmtree(pasta, ignore_errors=True)
+                apagar_pasta(pasta)
             else:
                 print(f"\n      falhou de novo: {resumo}")
                 print("      repositório deixado de fora")
-                shutil.rmtree(pasta, ignore_errors=True)
+                apagar_pasta(pasta)
 
     return None
 
@@ -1018,7 +1122,8 @@ def medir_historico_do_clone(repositorio: str, pasta: Path,
     mapa = resolver_commits(pasta, informados)
 
     if not mapa:
-        print("nenhum commit encontrado no repositório")
+        print(f"0 de {len(informados)} commits do dataset existem no "
+              f"clone em {pasta}")
         return None
 
     print(f"{len(mapa)}/{len(informados)} commits ", end="", flush=True)
@@ -1038,8 +1143,13 @@ def medir_historico_do_clone(repositorio: str, pasta: Path,
         if total >= 10 and feitas % max(1, total // 10) == 0:
             print(".", end="", flush=True)
 
-    fotografias = metricas_historico.medir_nos_commits(
-        pasta, caminhos_por_commit, progresso)
+    if config.HISTORICO_RAPIDO:
+        fotografias = historico_retomavel.medir_nos_commits(
+            pasta, caminhos_por_commit,
+            arquivo_do_ponto(repositorio), progresso)
+    else:
+        fotografias = metricas_historico.medir_nos_commits(
+            pasta, caminhos_por_commit, progresso)
 
     print(f" {time.time() - inicio:.0f}s ", end="", flush=True)
 
@@ -1067,7 +1177,7 @@ def medir_historico_do_clone(repositorio: str, pasta: Path,
     print(f"{len(linhas)} linhas ({sem_historico} sem histórico)")
 
     if config.APAGAR_CLONES:
-        shutil.rmtree(pasta, ignore_errors=True)
+        apagar_pasta(pasta)
 
     return pd.DataFrame(linhas)
 
@@ -1205,7 +1315,9 @@ def resumir(dataset: pd.DataFrame, falharam: list[str],
 # -------------------------------------------------------------
 # Executa as duas fases e grava o dataset
 # =============================================================
-def montar() -> pd.DataFrame:
+def montar(apenas: str | None = None) -> pd.DataFrame | None:
+    # Com 'apenas', processa um repositório e grava só o CSV dele. O
+    # dataset fica para o --so-prontos, depois do último.
     features.conferir_sem_vazamento()
     config.conferir_nomes()
 
@@ -1234,15 +1346,25 @@ def montar() -> pd.DataFrame:
 
     nomes = separar_por_repositorio()
 
+    if apenas and apenas not in nomes:
+        raise SystemExit(f"'{apenas}' não está entre os repositórios "
+                         f"da separação: {', '.join(nomes)}")
+
     # Projetos sem CSV e sem parquet separado: a montagem anterior
     # morreu entre apagar o parquet e gravar o CSV. Regravar só
     # esses custa uma releitura dos parquets de origem, enquanto
-    # FORCAR_MONTAGEM descartaria todos os CSVs já prontos.
+    # FORCAR_MONTAGEM descartaria todos os CSVs já prontos. Quem tem
+    # o CSV de código não precisa do parquet, e quem foi pulado não
+    # será medido.
     if not config.FORCAR_MONTAGEM:
         faltando = {
             nome for nome in nomes
-            if not (pasta_parciais /
-                    f"{nome.replace('/', '__')}.csv").exists()
+            if nome not in config.REPOSITORIOS_PULADOS
+            and (apenas is None or nome == apenas)
+            and not (pasta_parciais /
+                     f"{nome.replace('/', '__')}.csv").exists()
+            and not (pasta_parciais /
+                     f"{nome.replace('/', '__')}{SUFIXO_CODIGO}").exists()
             and not (pasta_separado() /
                      f"{nome.replace('/', '__')}.parquet").exists()
         }
@@ -1258,6 +1380,9 @@ def montar() -> pd.DataFrame:
     partes, falharam = [], []
 
     for ordem, repositorio in enumerate(nomes, start=1):
+        if apenas and repositorio != apenas:
+            continue
+
         base = repositorio.replace("/", "__")
         parcial = pasta_parciais / f"{base}.csv"
         parcial_codigo = pasta_parciais / f"{base}__codigo.csv"
@@ -1274,6 +1399,11 @@ def montar() -> pd.DataFrame:
 
         print(f"  [{ordem}/{len(nomes)}] {repositorio:<24} ",
               end="", flush=True)
+
+        if repositorio in config.REPOSITORIOS_PULADOS:
+            print("deixado de fora por REPOSITORIOS_PULADOS")
+            apagar_pasta(config.PASTA_CLONES / base)
+            continue
 
         separado = pasta_separado() / f"{base}.parquet"
         tem_codigo = parcial_codigo.exists() and not config.FORCAR_MONTAGEM
@@ -1344,11 +1474,17 @@ def montar() -> pd.DataFrame:
             falharam.append(repositorio)
             continue
 
-        resultado.to_csv(parcial, index=False, encoding="utf-8")
+        gravar_csv_atomico(resultado, parcial)
+        arquivo_do_ponto(repositorio).unlink(missing_ok=True)
         partes.append(resultado)
 
-        # O CSV completo existe, então o de código vira redundante
-        parcial_codigo.unlink(missing_ok=True)
+    if apenas:
+        if falharam:
+            raise SystemExit(f"\n  {apenas} falhou: nenhum CSV gravado.")
+
+        print(f"\n  {apenas} concluído em "
+              f"{time.time() - inicio:.0f} segundos.\n")
+        return None
 
     if not partes:
         raise SystemExit("Nenhum repositório processado.")
@@ -1369,6 +1505,9 @@ def main() -> None:
     parser.add_argument("--listar", action="store_true",
                         help="mostra os repositórios do Defectors com os "
                              "nomes exatos e a contagem de linhas")
+    parser.add_argument("--repo", default=None, metavar="NOME",
+                        help="processa só este repositório e grava o "
+                             "CSV dele, sem gravar o dataset")
     parser.add_argument("--amostra", type=int, default=None,
                         help="monta uma amostra piloto com esta "
                              "quantidade de linhas, sobrepondo "
@@ -1400,7 +1539,7 @@ def main() -> None:
         extrair_amostra(argumentos.extrair_amostra,
                         Path(argumentos.destino))
     else:
-        montar()
+        montar(argumentos.repo)
 
 
 if __name__ == "__main__":

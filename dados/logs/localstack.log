@@ -1,0 +1,25 @@
+======================================================================
+MONTAGEM DO DATASET
+======================================================================
+
+  origem  : defectors/
+  destino : dados\dataset.csv
+  escopo  : todos
+  divisão : GroupShuffleSplit por arquivo — 30% dos arquivos
+  amostra : dataset completo
+  parciais: dados\parciais\191f4dc636/
+
+----------------------------------------------------------------------
+ETAPA 1 — separar o Defectors em um parquet por repositório
+----------------------------------------------------------------------
+
+  Separação reaproveitada: 25 repositórios.
+
+----------------------------------------------------------------------
+ETAPA 2 — um repositório por vez: mede, clona, grava, apaga
+----------------------------------------------------------------------
+
+  [12/25] localstack               código reaproveitado (1446) clonando... 644/644 commits .......... 3s 1446 linhas (0 sem histórico)
+
+  localstack concluído em 21 segundos.
+
