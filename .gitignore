@@ -22,3 +22,9 @@ defectors_amostra/
 
 # O dataset e os resultados sobem
 # (dados/)
+# Frente 3: dependências e build do Next, e o banco local do Django
+frente3_web/web/node_modules/
+frente3_web/web/.next/
+frente3_web/web/next-env.d.ts
+*.tsbuildinfo
+frente3_web/backend/db.sqlite3

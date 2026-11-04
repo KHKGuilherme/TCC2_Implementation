@@ -1,20 +1,3 @@
-# Dependências do projeto.
-#
-# As versões são mínimas, e não fixas. O motivo é compatibilidade
-# com a versão do Python: pyarrow, numpy, pandas e scikit-learn
-# são compiladas, e cada versão delas só traz binário pronto para
-# algumas versões do Python. Fixar uma versão antiga faz o pip
-# tentar compilar do zero, o que falha na maioria das máquinas.
-#
-# Os mínimos abaixo são as primeiras versões com binário pronto
-# para Python 3.14. Em Python 3.10 a 3.13 o pip escolhe versões
-# mais novas que essas e funciona igual.
-#
-# Depois que a instalação funcionar, vale congelar o que foi
-# instalado de fato, para que o trabalho seja reproduzível:
-#
-#     pip freeze > requirements-travado.txt
-
 # ---- Métricas de código: leem o arquivo sem executá-lo ----
 # Python puro, funcionam em qualquer versão.
 radon>=6.0.1
@@ -45,3 +28,10 @@ matplotlib>=3.10.0
 # Escrito em Rust, processa um arquivo em milissegundos, que é o
 # que torna viável rodá-lo sobre as 137 mil linhas do dataset.
 ruff>=0.14.0
+
+# ---- Frente 3: a API web ----
+# Django serve a API; o Django REST Framework dá o formato JSON e
+# a página navegável em /api/. O site em si é Next.js, instalado
+# pelo npm dentro de frente3_web/web.
+Django>=5.2
+djangorestframework>=3.16

@@ -410,7 +410,7 @@ def mostrar_ranking(risco: pd.DataFrame) -> None:
 # -------------------------------------------------------------
 # A medição final, nos dados reservados
 # =============================================================
-def avaliar_no_teste(modelo, teste: pd.DataFrame) -> None:
+def avaliar_no_teste(modelo, teste: pd.DataFrame) -> dict:
 
     y = teste[features.COLUNA_ALVO].to_numpy()
     X = teste[features.FEATURES].to_numpy(dtype=float)
@@ -424,8 +424,8 @@ def avaliar_no_teste(modelo, teste: pd.DataFrame) -> None:
           f"{teste.repositorio.nunique()} repositórios")
     print(f"  {y.sum()} defeituosos ({100 * y.mean():.1f}%)")
 
-    mostrar_tabela("Resultado",
-                   {"modelo": calcular_metricas(y, probabilidade)})
+    resultado = calcular_metricas(y, probabilidade)
+    mostrar_tabela("Resultado", {"modelo": resultado})
 
     previsao = (probabilidade >= config.LIMIAR_DECISAO).astype(int)
     limpos, falsos, perdidos, achados = confusion_matrix(
@@ -455,13 +455,19 @@ def avaliar_no_teste(modelo, teste: pd.DataFrame) -> None:
     previsoes = gravar_previsoes(teste, probabilidade)
     mostrar_ranking(risco_por_arquivo(previsoes))
 
+    # Volta para o salvar(), que guarda junto do modelo: a Frente 3
+    # mostra a AUC na tela sem precisar reler o terminal
+    return {nome: round(float(valor), 4)
+            for nome, valor in resultado.items()}
+
 
 # =============================================================
 # Salva
 # -------------------------------------------------------------
 # Grava o modelo junto com a ordem das features
 # =============================================================
-def salvar(modelo, nome: str) -> None:
+def salvar(modelo, nome: str, medias: pd.Series,
+           metricas: dict | None) -> None:
 
     config.PASTA_MODELOS.mkdir(parents=True, exist_ok=True)
 
@@ -470,6 +476,17 @@ def salvar(modelo, nome: str) -> None:
         "nome":     nome,
         "features": features.FEATURES,
         "limiar":   config.LIMIAR_DECISAO,
+        # A média que preencheu os buracos do treino. A Frente 2
+        # preenche os buracos de um repositório novo com ELA, e não
+        # com a média do próprio repositório, para o modelo receber
+        # o mesmo tratamento que recebeu no treino
+        "medias":   {c: float(v) for c, v in medias.items()},
+        # Métricas no conjunto reservado; None quando não há reserva
+        "metricas": metricas,
+        "repositorios_treino": int(
+            pd.read_csv(config.ARQUIVO_DATASET,
+                        usecols=["repositorio"])["repositorio"].nunique()),
+        "treinado_em": time.strftime("%Y-%m-%d %H:%M"),
     }, config.ARQUIVO_MODELO, compress=config.COMPRESSAO_DO_MODELO)
 
     tamanho = config.ARQUIVO_MODELO.stat().st_size / 1e6
@@ -496,6 +513,11 @@ def treinar() -> None:
     features.conferir_sem_vazamento()
 
     treino, teste = carregar_dados()
+
+    # Antes do balanceamento, que replica linhas e mudaria a média.
+    # É a mesma conta que o preparar() acabou de usar: preencher
+    # buraco com a média não muda a média.
+    medias = preparacao.medias_do_treino(treino)
 
     print("=" * 70)
     print("TREINAMENTO")
@@ -544,6 +566,8 @@ def treinar() -> None:
 
     mostrar_importancias(modelo)
 
+    metricas = None
+
     if teste.empty:
         print("\n" + "=" * 70)
         print("SEM CONJUNTO RESERVADO")
@@ -551,9 +575,9 @@ def treinar() -> None:
         print("\n  A estratégia de divisão não reservou nada, então a comparação dentro do treino é a única medida de desempenho disponível.")
 
     else:
-        avaliar_no_teste(modelo, teste)
+        metricas = avaliar_no_teste(modelo, teste)
 
-    salvar(modelo, melhor)
+    salvar(modelo, melhor, medias, metricas)
 
     if config.GERAR_GRAFICOS:
         graficos.desenhar(modelo, melhor, teste)
