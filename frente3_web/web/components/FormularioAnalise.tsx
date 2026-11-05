@@ -1,13 +1,7 @@
-// frente3_web\web\components\FormularioAnalise.tsx
-
 "use client";
 
 /*
  * Campo do endereço do repositório e botão Analisar.
- *
- * Ao enviar, pede a análise e leva para a página dela. Se o mesmo
- * commit já foi analisado, a API devolve o resultado pronto e a
- * página abre direto nele.
  */
 
 import { useRouter } from "next/navigation";
@@ -15,6 +9,11 @@ import { useState } from "react";
 
 import { pedirAnalise } from "@/lib/api";
 
+// =============================================================
+// Formulario Analise
+// -------------------------------------------------------------
+// Pede a análise e abre a página dela
+// =============================================================
 export default function FormularioAnalise({ inicial = "" }: { inicial?: string }) {
   const router = useRouter();
   const [endereco, setEndereco] = useState(inicial);
@@ -23,9 +22,6 @@ export default function FormularioAnalise({ inicial = "" }: { inicial?: string }
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState("");
 
-  // =============================================================
-  // Enviar
-  // =============================================================
   async function enviar(evento: React.FormEvent) {
     evento.preventDefault();
     if (!endereco.trim() || enviando) return;

@@ -1,13 +1,6 @@
 """
 Confere as contas por commit das Frentes 1 e 2.
 
-O rótulo do Defectors é do commit, então as métricas, o ranking por
-commit e a lista de revisão precisam olhar para o commit. Um erro aqui
-não quebra nada na execução, só muda os números, então vale travar com
-um teste.
-
-O teste usa commits montados à mão e não lê arquivo nenhum.
-
 CMD -> python testes/testar_commits.py
 """
 
@@ -172,6 +165,8 @@ def testar_lista_de_revisao() -> None:
 
 # =============================================================
 # Main
+# -------------------------------------------------------------
+# Roda todos os testes
 # =============================================================
 def main() -> None:
     testar_medir_commit()

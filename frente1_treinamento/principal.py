@@ -21,7 +21,7 @@ from extrator import features
 # =============================================================
 # Dataset Utilizavel
 # -------------------------------------------------------------
-#  Verifica se possui CSV
+# Verifica se possui CSV
 # =============================================================
 def dataset_utilizavel() -> bool:
     if not config.ARQUIVO_DATASET.exists():
@@ -47,9 +47,6 @@ def dataset_utilizavel() -> bool:
           f"({len(dados)} linhas, "
           f"{dados.repositorio.nunique()} repositórios)")
 
-    # Um dataset legível não quer dizer um dataset completo. Se
-    # algum repositório falhou na montagem anterior, ele não tem
-    # CSV, e sem esta conferência nunca mais seria tentado.
     pendentes = montar_dataset.repositorios_pendentes()
 
     if pendentes and config.EXIGIR_TODOS_OS_REPOSITORIOS:
@@ -69,7 +66,7 @@ def dataset_utilizavel() -> bool:
 # =============================================================
 # Preparar Dataset
 # -------------------------------------------------------------
-#  Montagem / Carregamento de Dataset
+# Montagem / Carregamento de Dataset
 # =============================================================
 def preparar_dataset() -> None:
     if config.FORCAR_MONTAGEM:
@@ -87,9 +84,10 @@ def preparar_dataset() -> None:
 
 # =============================================================
 # Main
+# -------------------------------------------------------------
+# Prepara o dataset e treina o modelo
 # =============================================================
 def main() -> None:
-    """Prepara o dataset e treina o modelo."""
     config.conferir_local()
 
     print("=" * 66)

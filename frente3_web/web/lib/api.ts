@@ -1,11 +1,5 @@
-// frente3_web\web\lib\api.ts
-
 /*
  * Conversa com a API do Django.
- *
- * As chamadas vão para /api/..., e o next.config.ts repassa ao
- * Django. Assim o navegador só fala com um endereço e não existe
- * problema de CORS.
  */
 
 // =============================================================
@@ -21,7 +15,6 @@ export type Situacao =
   | "sem_parse"
   | "sem_funcoes";
 
-// [valor, percentil dentro do repositório]
 export type ValorComPercentil = [number | null, number | null];
 
 export interface CommitResumo {
@@ -171,10 +164,25 @@ async function pedir<T>(caminho: string, opcoes?: RequestInit): Promise<T> {
 
 export const buscarModelo = () => pedir<Modelo>("modelo");
 
+// =============================================================
+// Buscar Recentes
+// -------------------------------------------------------------
+// Pede as análises recentes
+// =============================================================
 export const buscarRecentes = () => pedir<AnaliseResumo[]>("analises");
 
+// =============================================================
+// Buscar Analise
+// -------------------------------------------------------------
+// Pede uma análise pelo identificador
+// =============================================================
 export const buscarAnalise = (id: string) => pedir<Analise>(`analises/${id}`);
 
+// =============================================================
+// Pedir Analise
+// -------------------------------------------------------------
+// Envia um pedido de análise
+// =============================================================
 export const pedirAnalise = (endereco: string, ramo?: string) =>
   pedir<{ id: string; reaproveitada: boolean }>("analises", {
     method: "POST",

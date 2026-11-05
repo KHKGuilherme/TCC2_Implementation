@@ -2,24 +2,6 @@
 testar_caminhos.py
 ==================
 
-Confere que o extrator de histórico encontra os arquivos mesmo
-quando o PyDriller devolve caminhos com barra invertida.
-
-Por que isso precisa de teste próprio: o PyDriller monta os
-caminhos passando por Path, e o resultado depende do sistema
-operacional. No Linux sai 'pacote/modulo.py' e no Windows sai
-'pacote\\modulo.py'. O dataset guarda sempre barra normal.
-
-Se as duas formas não forem reconciliadas, a busca de cada
-arquivo no histórico falha, toda linha é descartada por falta de
-histórico, e a montagem termina sem gravar nada — sem erro
-nenhum, apenas vazia. É uma falha silenciosa e que só aparece em
-uma das duas plataformas, então vale travar com um teste.
-
-O teste não usa Git. Ele monta commits de mentira que imitam o
-formato que o PyDriller entrega, nas duas convenções de barra, e
-confere que o resultado é o mesmo.
-
 Uso:
     python testes/testar_caminhos.py
 """
@@ -35,6 +17,8 @@ from pydriller.domain.commit import ModificationType
 
 # =============================================================
 # MudancaFalsa — imita um arquivo alterado do PyDriller
+# -------------------------------------------------------------
+# Reproduz os campos de ModifiedFile que o extrator usa
 # =============================================================
 class MudancaFalsa:
     """Reproduz os campos de ModifiedFile que o extrator usa."""
@@ -51,6 +35,8 @@ class MudancaFalsa:
 
 # =============================================================
 # AutorFalso / CommitFalso — imitam um commit do PyDriller
+# -------------------------------------------------------------
+# Autor de commit montado à mão
 # =============================================================
 class AutorFalso:
     def __init__(self, email):
@@ -66,13 +52,10 @@ class CommitFalso:
 
 # =============================================================
 # construir_historico — roda o acumulador sobre commits falsos
+# -------------------------------------------------------------
+# Acumula três commits usando o separador indicado
 # =============================================================
 def construir_historico(separador: str) -> dict:
-    """Acumula três commits usando o separador indicado.
-
-    O mesmo arquivo é alterado três vezes por dois autores, então
-    o resultado esperado é sempre 3 revisões e 2 autores.
-    """
     caminho = f"pacote{separador}modulo.py"
     acumulado = {}
 
@@ -90,9 +73,10 @@ def construir_historico(separador: str) -> dict:
 
 # =============================================================
 # testar_barra_invertida — Windows e Linux dão o mesmo resultado
+# -------------------------------------------------------------
+# Busca por barra normal funciona nas duas convenções
 # =============================================================
 def testar_barra_invertida() -> None:
-    """Busca por barra normal funciona nas duas convenções."""
     esperado = {"revisoes": 3, "autores": 2, "churn": 45}
     pedido = {"pacote/modulo.py"}
 
@@ -113,14 +97,10 @@ def testar_barra_invertida() -> None:
 
 # =============================================================
 # testar_renomeacao — o histórico acompanha a mudança de pasta
+# -------------------------------------------------------------
+# Arquivo que troca de pasta mantém o histórico somado
 # =============================================================
 def testar_renomeacao() -> None:
-    """Arquivo que troca de pasta mantém o histórico somado.
-
-    Conferido nas duas convenções de barra, porque a renomeação
-    compara o caminho antigo com as chaves já acumuladas e é
-    justamente onde a divergência de separador se esconde.
-    """
     for nome, sep in [("Linux", "/"), ("Windows", "\\")]:
         antigo = f"pacote{sep}modulo.py"
         novo = f"src{sep}pacote{sep}modulo.py"
@@ -159,9 +139,10 @@ def testar_renomeacao() -> None:
 
 # =============================================================
 # main — roda todos os testes
+# -------------------------------------------------------------
+# Executa os testes e informa o resultado
 # =============================================================
 def main() -> None:
-    """Executa os testes e informa o resultado."""
     print("Testes de normalização de caminho\n")
 
     testar_barra_invertida()

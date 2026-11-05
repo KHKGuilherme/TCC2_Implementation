@@ -1,13 +1,7 @@
-// frente3_web\web\components\Arvore.tsx
-
 "use client";
 
 /*
  * A árvore de pastas e arquivos, com o risco em cada linha.
- *
- * Arquivo mostra a própria probabilidade. Pasta mostra a MAIOR
- * probabilidade dentro dela, e quantos arquivos dela passam do
- * limiar.
  */
 
 import { nivel, ordenar, porcento, type No, type Ordem } from "@/lib/arvore";
@@ -22,7 +16,6 @@ interface Props {
   selecionar: (caminho: string) => void;
 }
 
-// Rótulo curto de quem ficou sem nota, ao lado do nome
 const MOTIVO_CURTO: Record<string, string> = {
   teste: "teste",
   ignorado: "fora do escopo",
@@ -32,6 +25,11 @@ const MOTIVO_CURTO: Record<string, string> = {
   sem_funcoes: "sem funções",
 };
 
+// =============================================================
+// Arvore
+// -------------------------------------------------------------
+// A raiz da árvore de arquivos
+// =============================================================
 export default function Arvore(props: Props) {
   return (
     <ul className="arvore" role="tree">

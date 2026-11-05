@@ -1,12 +1,5 @@
-// frente3_web\web\lib\arvore.ts
-
 /*
  * Converte a lista plana de arquivos em árvore de pastas.
- *
- * A regra pedida para as pastas: o risco de uma pasta é o MAIOR
- * risco entre os arquivos dentro dela, em qualquer profundidade.
- * Uma pasta "vermelha" diz que há pelo menos um arquivo vermelho
- * lá dentro, e não que a média dela é ruim.
  */
 
 import type { ArquivoAnalisado } from "./api";
@@ -17,9 +10,9 @@ export interface No {
   tipo: "pasta" | "arquivo";
   filhos: No[];
   arquivo?: ArquivoAnalisado;
-  risco: number | null; // maior probabilidade abaixo deste nó
+  risco: number | null;
   avaliados: number;
-  alto: number; // quantos acima do limiar
+  alto: number;
 }
 
 // =============================================================
@@ -29,11 +22,14 @@ export interface No {
 // =============================================================
 export type Nivel = "alto" | "medio" | "baixo" | "nenhum";
 
+// =============================================================
+// Nivel
+// -------------------------------------------------------------
+// Faixa de cor de uma nota
+// =============================================================
 export function nivel(risco: number | null | undefined, limiar: number): Nivel {
   if (risco === null || risco === undefined) return "nenhum";
   if (risco >= limiar) return "alto";
-  // As probabilidades do modelo ficam espremidas perto do limiar,
-  // então a faixa do meio é estreita de propósito
   if (risco >= limiar - 0.1) return "medio";
   return "baixo";
 }
@@ -45,6 +41,11 @@ export const ROTULO_NIVEL: Record<Nivel, string> = {
   nenhum: "não avaliado",
 };
 
+// =============================================================
+// Porcento
+// -------------------------------------------------------------
+// Formata uma fração como porcentagem
+// =============================================================
 export function porcento(valor: number | null | undefined, casas = 1): string {
   if (valor === null || valor === undefined) return "—";
   return `${(100 * valor).toFixed(casas)}%`;
@@ -88,13 +89,20 @@ export function montarArvore(arquivos: ArquivoAnalisado[], limiar: number): No {
   return compactar(raiz);
 }
 
+// =============================================================
+// Nova Pasta
+// -------------------------------------------------------------
+// Cria um nó de pasta vazio
+// =============================================================
 function novaPasta(nome: string, caminho: string): No {
   return { nome, caminho, tipo: "pasta", filhos: [], risco: null, avaliados: 0, alto: 0 };
 }
 
+// =============================================================
+// Somar
 // -------------------------------------------------------------
-// Somar — leva o maior risco e as contagens até a raiz
-// -------------------------------------------------------------
+// Leva o maior risco e as contagens até a raiz
+// =============================================================
 function somar(no: No): void {
   if (no.tipo === "arquivo") return;
 
@@ -108,12 +116,12 @@ function somar(no: No): void {
   }
 }
 
+// =============================================================
+// Compactar
 // -------------------------------------------------------------
-// Compactar — junta pasta que só tem uma pasta dentro
-// -------------------------------------------------------------
+// Junta a pasta que só contém outra pasta
+// =============================================================
 function compactar(no: No): No {
-  // "src" contendo só "black" vira uma linha "src/black", como o
-  // GitHub e o VS Code mostram. Poupa um clique por nível.
   no.filhos = no.filhos.map(compactar);
 
   if (no.tipo === "pasta" && no.nome && no.filhos.length === 1 && no.filhos[0].tipo === "pasta") {
@@ -131,6 +139,11 @@ function compactar(no: No): No {
 // =============================================================
 export type Ordem = "risco" | "nome";
 
+// =============================================================
+// Ordenar
+// -------------------------------------------------------------
+// Ordena os filhos por risco ou por nome
+// =============================================================
 export function ordenar(filhos: No[], ordem: Ordem): No[] {
   return [...filhos].sort((a, b) => {
     if (a.tipo !== b.tipo) return a.tipo === "pasta" ? -1 : 1;

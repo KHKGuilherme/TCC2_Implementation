@@ -1,9 +1,5 @@
-# frente3_web\backend\analises\models.py
 """
 Uma análise de repositório, do pedido até o resultado.
-
-O resultado inteiro da Frente 2 fica num campo JSON: a tela precisa
-dele de uma vez, e nada aqui consulta arquivo por arquivo no banco.
 """
 
 import uuid
@@ -12,36 +8,29 @@ from django.db import models
 
 
 class Analise(models.Model):
-
     class Status(models.TextChoices):
         NA_FILA = "na_fila", "na fila"
         RODANDO = "rodando", "rodando"
         CONCLUIDA = "concluida", "concluída"
         ERRO = "erro", "erro"
 
-    # UUID e não número: o endereço da página do resultado não deixa
-    # adivinhar as análises dos outros
     id = models.UUIDField(primary_key=True, default=uuid.uuid4,
                           editable=False)
 
-    repositorio = models.CharField(max_length=200)      # dono/repo
+    repositorio = models.CharField(max_length=200)
     ramo = models.CharField(max_length=200, blank=True)
     commit = models.CharField(max_length=40, blank=True)
 
     status = models.CharField(max_length=10, choices=Status.choices,
                               default=Status.NA_FILA)
 
-    # Progresso, escrito pela fila enquanto a análise roda
     etapa = models.CharField(max_length=20, blank=True)
-    progresso = models.FloatField(default=0.0)          # de 0 a 1
+    progresso = models.FloatField(default=0.0)
     mensagem = models.CharField(max_length=200, blank=True)
 
     erro = models.TextField(blank=True)
     resultado = models.JSONField(null=True, blank=True)
 
-    # Cópia pequena de resultado["resumo"]. A lista de recentes e
-    # os números da página inicial leem só isto, sem carregar o
-    # resultado inteiro, que passa de 1 MB num repositório grande.
     resumo = models.JSONField(null=True, blank=True)
 
     criada = models.DateTimeField(auto_now_add=True)

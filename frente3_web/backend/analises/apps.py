@@ -1,4 +1,3 @@
-# frente3_web\backend\analises\apps.py
 """
 Registro do app de análises no Django.
 """

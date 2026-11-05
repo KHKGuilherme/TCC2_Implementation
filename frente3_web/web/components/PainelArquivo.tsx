@@ -1,12 +1,5 @@
-// frente3_web\web\components\PainelArquivo.tsx
-
 /*
  * Detalhe do arquivo selecionado na árvore.
- *
- * Mostra a nota da última alteração do arquivo, a posição no ranking
- * e as medidas mais legíveis, cada uma com o percentil dentro do próprio
- * repositório: "mais complexo que 92% dos arquivos daqui" diz mais
- * do que "complexidade 34".
  */
 
 import type { ArquivoAnalisado, Resultado } from "@/lib/api";
@@ -30,6 +23,11 @@ function formatar(valor: number | null): string {
   return valor.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
 }
 
+// =============================================================
+// Painel Arquivo
+// -------------------------------------------------------------
+// Nota, última alteração e medidas do arquivo
+// =============================================================
 export default function PainelArquivo({ arquivo, resultado }: Props) {
   if (!arquivo) {
     return (
@@ -66,7 +64,6 @@ export default function PainelArquivo({ arquivo, resultado }: Props) {
             </div>
           </div>
 
-          {/* A régua mostra onde fica o limiar de decisão do modelo */}
           <div className="regua" aria-hidden>
             <span className={`regua-valor fundo-${faixa}`} style={{ width: `${100 * (arquivo.probabilidade ?? 0)}%` }} />
             <span className="regua-limiar" style={{ left: `${100 * limiar}%` }} />
@@ -100,7 +97,6 @@ export default function PainelArquivo({ arquivo, resultado }: Props) {
             <tbody>
               {resultado.metricas_exibidas.map((m) => {
                 const [valor, percentil] = arquivo.metricas?.[m.coluna] ?? [null, null];
-                // Pinta só os extremos do lado ruim
                 const ruim =
                   percentil !== null && (m.melhor === "menor" ? percentil >= 0.85 : percentil <= 0.15);
                 return (

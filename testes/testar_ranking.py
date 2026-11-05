@@ -1,14 +1,6 @@
 """
 Confere o ranking por arquivo da Frente 1.
 
-O rótulo de cada arquivo vem do retrato mais recente. Se voltar a
-ser "teve defeito em algum commit", ele cresce com o número de
-retratos e a precisão no topo chega a 100% sem medir o modelo. O
-erro não quebra nada na execução, só melhora o número, então vale
-travar com um teste.
-
-O teste usa previsões montadas à mão e não lê arquivo nenhum.
-
 CMD -> python testes/testar_ranking.py
 """
 
@@ -40,7 +32,6 @@ def montar_previsoes(linhas: list[tuple]) -> pd.DataFrame:
 # Defeito antigo não marca o arquivo, e a ordem das linhas não importa
 # =============================================================
 def testar_rotulo_mais_recente() -> None:
-    # O retrato mais recente é a linha do meio, de propósito
     risco = treinar.risco_por_arquivo(montar_previsoes([
         ("p", "a.py", 10, 1, 0.9, 1),
         ("p", "a.py", 30, 3, 0.2, 0),
@@ -99,8 +90,6 @@ def testar_precisao_por_repositorio() -> None:
          for i in range(10)]
         + [("pequeno", "x.py", 1, 1, 0.1, 0)]))
 
-    # 1 de 1 em 'grande' acerta; o de 'pequeno' entra pelo mínimo
-    # de um arquivo por projeto e erra
     assert treinar.precisao_por_repositorio(risco, 0.1) == 0.5
     print("  ok: precisão somada por repositório")
 

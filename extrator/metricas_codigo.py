@@ -1,20 +1,5 @@
 """
 Mede um arquivo .py sem olhar o histórico, em cinco grupos.
-
-  base       -> Radon e Lizard: tamanho, complexidade, funções
-  comentario -> Radon raw: comentários e linhas em branco
-  halstead   -> Radon: volume, dificuldade, esforço, bugs
-  lizard     -> aninhamento, tokens e parâmetros
-  ast        -> TODO/FIXME, except pelado, imports, classes
-  ruff       -> contagens de violação por categoria
-
-Só o grupo base é obrigatório. Os outros têm chave no config, e
-desligar um tira as colunas dele do dataset.
-
-A ordem interna importa por desempenho: o Lizard roda primeiro e
-descarta arquivo sem função nenhuma, porque o radon.raw.analyze
-trava por minutos em arquivos que são um literal gigante gerado
-por máquina, e o Lizard responde "0 funções" em centésimos.
 """
 
 import ast
@@ -34,16 +19,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import config
 
 
-# Marcas de dívida técnica autoadmitida. A literatura trata isso
-# como sinal próprio: onde o autor escreveu "isto está errado",
-# costuma haver defeito depois.
 MARCAS_DE_DIVIDA = re.compile(r"#.*\b(TODO|FIXME|XXX|HACK)\b")
 
-# Categorias do ruff que viram coluna. A chave é o nome da coluna,
-# o valor são os prefixos de regra que entram nela.
 CATEGORIAS_RUFF = {
-    "ruff_bugbear":      ("B",),     # padrões que costumam virar bug
-    "ruff_seguranca":    ("S",),     # bandit embutido
+    "ruff_bugbear":      ("B",),
+    "ruff_seguranca":    ("S",),
     "ruff_excecao":      ("TRY", "BLE"),
     "ruff_simplificar":  ("SIM",),
     "ruff_refatorar":    ("PLR", "C90"),
@@ -51,12 +31,13 @@ CATEGORIAS_RUFF = {
     "ruff_retorno":      ("RET",),
 }
 
-# Guarda se o ruff já foi procurado, para avisar uma vez só
 _ruff_disponivel = None
 
 
 # =============================================================
 # Contador de Funções do Arquivo
+# -------------------------------------------------------------
+# Conta as funções do arquivo, ou None se ele não faz parse
 # =============================================================
 def contar_funcoes(nome: str, codigo: str) -> int | None:
     try:
@@ -117,7 +98,6 @@ def medir_lizard_extra(resultado, funcoes) -> dict:
     }
 
 
-# Nós que abrem um nível de aninhamento
 BLOCOS_ANINHAVEIS = (ast.If, ast.For, ast.AsyncFor, ast.While,
                      ast.With, ast.AsyncWith, ast.Try)
 
@@ -159,8 +139,6 @@ def medir_ast(arvore: ast.AST, codigo: str) -> dict:
         if isinstance(no, ast.Try):
             medidas["qtd_try"] += 1
         elif isinstance(no, ast.ExceptHandler):
-            # 'except:' sem tipo engole qualquer erro, inclusive os
-            # que não deveria
             if no.type is None:
                 medidas["except_pelado"] += 1
         elif isinstance(no, ast.Import):
@@ -225,10 +203,6 @@ def medir_ruff(nome: str, codigo: str) -> dict:
     except Exception:
         return vazio
 
-    # 0 = nenhuma violação, 1 = violações encontradas, 2 = o ruff
-    # falhou. Sem esta conferência, uma falha dele viraria zero em
-    # tudo, e zero quer dizer "arquivo limpo" — o oposto de "não
-    # sei". Vazio é preenchido depois com a média do treino.
     if processo.returncode not in (0, 1):
         return vazio
 
@@ -236,7 +210,6 @@ def medir_ruff(nome: str, codigo: str) -> dict:
     saida = processo.stdout.decode("utf-8", errors="replace")
 
     for linha in saida.splitlines():
-        # Formato: caminho:linha:coluna: CÓDIGO mensagem
         partes = linha.split(": ", 1)
         if len(partes) < 2:
             continue
@@ -258,6 +231,8 @@ def medir_ruff(nome: str, codigo: str) -> dict:
 
 # =============================================================
 # Calcular as Features do Arquivo Atual
+# -------------------------------------------------------------
+# Calcula as métricas de código de um arquivo
 # =============================================================
 def medir(nome: str, codigo: str) -> dict | None:
     quantidade = contar_funcoes(nome, codigo)

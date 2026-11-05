@@ -1,4 +1,3 @@
-# frente3_web\backend\analises\admin.py
 """
 As análises no painel do Django, em /admin/.
 """

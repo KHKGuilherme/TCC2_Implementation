@@ -35,8 +35,6 @@ import graficos
 import preparacao
 from extrator import derivadas, features
 
-# Colunas que dizem qual retrato de um arquivo veio depois, nesta
-# ordem. Saem do dataset porque previsoes.csv não guarda data.
 COLUNAS_DE_ORDEM = ("idade_dias", "revisoes")
 
 
@@ -55,10 +53,6 @@ def criar_modelos() -> dict:
                                           class_weight="balanced",
                                           random_state=semente)),
         ]),
-        # min_samples_leaf vem do config porque é ele que decide o
-        # tamanho do arquivo salvo: com 3, as 300 árvores somam 8
-        # milhões de nós e 648 MB, acima do limite do GitHub, sem
-        # ganho de AUC
         "Random Forest": Pipeline([
             ("escala", StandardScaler()),
             ("modelo", RandomForestClassifier(
@@ -81,7 +75,6 @@ def criar_modelos() -> dict:
 # Avalia previsões contra o gabarito
 # =============================================================
 def calcular_metricas(verdade, probabilidade) -> dict:
-
     previsao = (probabilidade >= config.LIMIAR_DECISAO).astype(int)
 
     tem_duas_classes = len(np.unique(verdade)) > 1
@@ -102,7 +95,6 @@ def calcular_metricas(verdade, probabilidade) -> dict:
 # Previsões sem ter visto a linha
 # =============================================================
 def prever_fora_da_amostra(modelo, X, y, grupos, divisor):
-
     probabilidades = np.full(len(y), np.nan)
 
     for indices_treino, indices_teste in divisor.split(X, y, groups=grupos):
@@ -122,7 +114,6 @@ def prever_fora_da_amostra(modelo, X, y, grupos, divisor):
 # Imprime um quadro de métricas
 # =============================================================
 def mostrar_tabela(titulo: str, resultados: dict) -> None:
-
     print(f"\n  {titulo}")
     print(f"    {'':<24} {'AUC':>7} {'F1':>7} {'MCC':>7} "
           f"{'Precisão':>9} {'Revocação':>10}")
@@ -153,14 +144,10 @@ def so_maduros(dados: pd.DataFrame) -> pd.DataFrame:
 # lê o dataset e aplica a divisão atual
 # =============================================================
 def carregar_dados() -> tuple[pd.DataFrame, pd.DataFrame]:
-
     dados = pd.read_csv(config.ARQUIVO_DATASET)
     features.conferir_contrato(dados.columns)
     dados = preparacao.juntar_commits(dados)
 
-    # ANTES da divisão, de propósito: o percentil é calculado
-    # dentro de cada repositório e precisa de todos os arquivos
-    # dele. Usa só valores de feature, nunca o rótulo.
     dados = derivadas.acrescentar(dados, features.COLUNAS_BASE)
 
     gravada = dados[features.COLUNA_PARTICAO]
@@ -176,8 +163,6 @@ def carregar_dados() -> tuple[pd.DataFrame, pd.DataFrame]:
     treino = so_maduros(dados[dados[features.COLUNA_PARTICAO] == "treino"])
     teste = dados[dados[features.COLUNA_PARTICAO] == "teste"]
 
-    # O pré-processamento vem DEPOIS da divisão, e não antes: a
-    # média que preenche os buracos tem de sair só do treino
     return preparacao.preparar(treino, teste)
 
 
@@ -187,7 +172,6 @@ def carregar_dados() -> tuple[pd.DataFrame, pd.DataFrame]:
 # Escolhe o melhor dentro do treino por AUC
 # =============================================================
 def comparar_modelos(treino: pd.DataFrame, grupos, divisor) -> str:
-
     y = treino[features.COLUNA_ALVO].to_numpy()
     X = treino[features.FEATURES].to_numpy(dtype=float)
 
@@ -217,7 +201,7 @@ def comparar_modelos(treino: pd.DataFrame, grupos, divisor) -> str:
 
 
 # =============================================================
-# Comparar Grupos de Features 
+# Comparar Grupos de Features
 # -------------------------------------------------------------
 # código contra histórico
 # =============================================================
@@ -237,9 +221,6 @@ def comparar_grupos_de_features(treino: pd.DataFrame, nome_modelo: str,
         f"medidas ({len(base)})": base,
     }
 
-    # Um grupo derivado de cada vez SOBRE as medidas: a linha
-    # mostra o que aquele grupo acrescenta, e não o que ele vale
-    # sozinho. É esse o número que decide se vale a pena mantê-lo.
     for nome in derivadas.grupos_ligados():
         colunas = derivadas.colunas_do_grupo(nome, base)
         conjuntos[f"medidas + {nome} (+{len(colunas)})"] = base + colunas
@@ -265,7 +246,6 @@ def comparar_grupos_de_features(treino: pd.DataFrame, nome_modelo: str,
 # Peso de cada feature no modelo
 # =============================================================
 def mostrar_importancias(modelo) -> None:
-
     interno = modelo.named_steps["modelo"]
 
     if hasattr(interno, "feature_importances_"):
@@ -286,13 +266,6 @@ def mostrar_importancias(modelo) -> None:
         barra = "#" * int(round(pesos[i] * 60))
         print(f"    {features.FEATURES[i]:<28} {pesos[i]:.3f}  {barra}")
 
-    # Por ORIGEM, e não só pelas três colunas cruas de histórico.
-    #
-    # A versão antiga somava revisoes + autores + churn e chamava
-    # aquilo de "peso do histórico". Com as derivadas isso passou a
-    # mentir: 'revisoes_por_autor' é a feature mais importante do
-    # modelo e também é histórico, só que derivada. A soma antiga
-    # a ignorava e sugeria que o histórico tinha deixado de pesar.
     por_origem = {}
     for i, coluna in enumerate(features.FEATURES):
         origem = features.origem_da_feature(coluna)
@@ -336,8 +309,6 @@ def acrescentar_ordem(previsoes: pd.DataFrame) -> pd.DataFrame:
     ordem = pd.read_csv(config.ARQUIVO_DATASET,
                         usecols=chave + list(COLUNAS_DE_ORDEM))
 
-    # validate para o programa parar se a chave repetir: uma linha
-    # duplicada aqui mudaria em silêncio qual retrato é o mais recente
     return previsoes.merge(ordem, on=chave, how="left",
                            validate="one_to_one")
 
@@ -348,25 +319,9 @@ def acrescentar_ordem(previsoes: pd.DataFrame) -> pd.DataFrame:
 # Uma linha por arquivo, pelo seu retrato mais recente
 # =============================================================
 def risco_por_arquivo(previsoes: pd.DataFrame) -> pd.DataFrame:
-    # Cada arquivo entra no dataset uma vez por commit em que foi
-    # alterado, então o mesmo caminho tem vários retratos. A nota e
-    # o rótulo vêm do mais recente, o mesmo retrato que a Frente 2
-    # avalia ao fotografar o arquivo no último commit.
-    #
-    # O rótulo não pode ser "teve defeito em algum commit": esse
-    # cresce com o número de retratos (28,7% com um retrato, 96,8%
-    # com 10 a 19 no teste), e a precisão no topo chega a 100% sem
-    # dizer nada do modelo. Pelo retrato mais recente, a taxa fica
-    # perto de 30% em todas as faixas.
-    #
-    # idade_dias sozinha empata quando dois commits caem no mesmo
-    # dia, e nesses casos desempata por revisoes, que conta os
-    # commits anteriores do arquivo.
     ordenadas = previsoes.sort_values(
         ["repositorio", "arquivo", *COLUNAS_DE_ORDEM], kind="stable")
 
-    # risco_medio e risco_maximo são descritivos: no teste, os dois
-    # ordenam pior que risco_atual
     risco = ordenadas.groupby(["repositorio", "arquivo"], as_index=False).agg(
         retratos=("probabilidade", "size"),
         risco_atual=("probabilidade", "last"),
@@ -389,9 +344,6 @@ def risco_por_arquivo(previsoes: pd.DataFrame) -> pd.DataFrame:
 # Uma linha por commit, pela maior nota entre os arquivos dele
 # =============================================================
 def risco_por_commit(previsoes: pd.DataFrame) -> pd.DataFrame:
-    # É a unidade do rótulo e da pergunta do projeto: "este commit
-    # introduziu um defeito?". O commit conta como defeituoso se algum
-    # arquivo dele foi marcado, e a Frente 2 usa a mesma maior nota.
     risco = previsoes.groupby(["repositorio", "commit"], as_index=False).agg(
         arquivos=("probabilidade", "size"),
         risco=("probabilidade", "max"),
@@ -409,10 +361,6 @@ def risco_por_commit(previsoes: pd.DataFrame) -> pd.DataFrame:
 # =============================================================
 def precisao_por_repositorio(risco: pd.DataFrame, fracao: float,
                              rotulo: str = "defeito_atual") -> float:
-    # Espera a tabela ordenada por risco, como risco_por_arquivo e
-    # risco_por_commit a devolvem. É a situação da Frente 2, que ordena
-    # um projeto por vez: o topo geral mistura projetos com taxas de
-    # defeito de 21% a 79% e premia quem está no projeto mais defeituoso.
     acertos = 0
     total = 0
 
@@ -460,9 +408,6 @@ def mostrar_ranking(risco: pd.DataFrame) -> None:
         print(f"    AUC por arquivo: "
               f"{roc_auc_score(y, risco['risco_atual']):.3f}")
 
-    # Precisão no topo é a métrica que importa para uma ferramenta
-    # que ORDENA: se o desenvolvedor vai olhar os 50 primeiros, o
-    # que vale é quantos daqueles 50 têm defeito mesmo
     print(f"\n  Precisão no topo do ranking geral")
     for quantos in config.TOPOS_AVALIADOS:
         if quantos > len(risco):
@@ -516,13 +461,10 @@ def avaliar_ranking(previsoes: pd.DataFrame) -> float:
 # A medição final, nos dados reservados
 # =============================================================
 def avaliar_no_teste(modelo, teste: pd.DataFrame) -> dict:
-
     y = teste[features.COLUNA_ALVO].to_numpy()
     X = teste[features.FEATURES].to_numpy(dtype=float)
     auc_com_recentes = roc_auc_score(y, modelo.predict_proba(X)[:, 1])
 
-    # Com ESTRATEGIA_DIVISAO = "defectors" o teste só tem retratos
-    # recentes. Sem nada maduro, a avaliação fica com o que existe.
     maduros = so_maduros(teste)
     if len(maduros):
         teste = maduros
@@ -567,13 +509,9 @@ def avaliar_no_teste(modelo, teste: pd.DataFrame) -> dict:
         print(f"    {nome:<32} {len(grupo):>7} {yg.sum():>9} "
               f"{auc:>7.3f} {encontrados:>8}")
 
-    # A saída que interessa na prática: uma nota por arquivo, e não
-    # um número só por projeto
     previsoes = gravar_previsoes(teste, probabilidade)
     resultado["AUC por commit"] = avaliar_ranking(previsoes)
 
-    # Volta para o salvar(), que guarda junto do modelo: a Frente 3
-    # mostra a AUC na tela sem precisar reler o terminal
     return {nome: round(float(valor), 4)
             for nome, valor in resultado.items()}
 
@@ -588,8 +526,6 @@ def salvar(modelo, nome: str, medias: pd.Series,
 
     config.PASTA_MODELOS.mkdir(parents=True, exist_ok=True)
 
-    # Grava ao lado e troca no fim: um reinício no meio da gravação
-    # não pode destruir o modelo que a Frente 2 está usando
     temporario = config.ARQUIVO_MODELO.with_name(
         config.ARQUIVO_MODELO.name + ".tmp")
 
@@ -598,12 +534,7 @@ def salvar(modelo, nome: str, medias: pd.Series,
         "nome":     nome,
         "features": features.FEATURES,
         "limiar":   config.LIMIAR_DECISAO,
-        # A média que preencheu os buracos do treino. A Frente 2
-        # preenche os buracos de um repositório novo com ELA, e não
-        # com a média do próprio repositório, para o modelo receber
-        # o mesmo tratamento que recebeu no treino
         "medias":   {c: float(v) for c, v in medias.items()},
-        # Métricas no conjunto reservado; None quando não há reserva
         "metricas": metricas,
         "repositorios_treino": int(
             pd.read_csv(config.ARQUIVO_DATASET,
@@ -616,9 +547,6 @@ def salvar(modelo, nome: str, medias: pd.Series,
     print(f"\n  Modelo gravado: {config.ARQUIVO_MODELO} "
           f"({nome}, {tamanho:.1f} MB)")
 
-    # O GitHub recusa arquivo acima de 100 MB, e a recusa derruba o
-    # push inteiro. Avisar aqui é melhor que descobrir depois de
-    # dois minutos enviando.
     if tamanho > 100:
         print(f"  AVISO: acima do limite de 100 MB do GitHub. "
               f"Aumente MINIMO_POR_FOLHA no config.py.")
@@ -632,14 +560,10 @@ def salvar(modelo, nome: str, medias: pd.Series,
 # Treina o Modelo
 # =============================================================
 def treinar(so_final: bool = False) -> None:
-
     features.conferir_sem_vazamento()
 
     treino, teste = carregar_dados()
 
-    # Antes do balanceamento, que replica linhas e mudaria a média.
-    # É a mesma conta que o preparar() acabou de usar: preencher
-    # buraco com a média não muda a média.
     medias = preparacao.medias_do_treino(treino)
 
     print("=" * 70)
@@ -665,16 +589,8 @@ def treinar(so_final: bool = False) -> None:
 
     inicio = time.time()
 
-    # A correlação sai ANTES do balanceamento, de propósito: ela
-    # descreve os dados, e replicar linha mexe nos coeficientes.
-    # Numa medição a diferença foi de -0,075 para -0,166 só por
-    # causa das repetições — a tabela da monografia tem de falar
-    # dos dados reais, não da cópia reamostrada.
     preparacao.descrever(treino)
 
-    # Depois da divisão: o teste mantém a proporção real, e os
-    # grupos da validação cruzada são formados a partir do treino
-    # que sai daqui
     treino = balanceamento.balancear(treino)
 
     grupos, divisor, descricao = divisao.validacao(treino)
@@ -686,7 +602,6 @@ def treinar(so_final: bool = False) -> None:
         melhor = comparar_modelos(treino, grupos, divisor)
         comparar_grupos_de_features(treino, melhor, grupos, divisor)
 
-    # O modelo final usa todas as linhas de treino disponíveis.
     modelo = criar_modelos()[melhor]
     modelo.fit(treino[features.FEATURES].to_numpy(dtype=float),
                treino[features.COLUNA_ALVO].to_numpy())

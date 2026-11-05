@@ -1,13 +1,7 @@
-// frente3_web\web\app\analise\[id]\page.tsx
-
 "use client";
 
 /*
  * Página de uma análise.
- *
- * Enquanto roda, consulta a API a cada segundo e mostra o
- * progresso. Quando termina, mostra a árvore de arquivos à esquerda
- * e o detalhe do arquivo escolhido à direita.
  */
 
 import Link from "next/link";
@@ -24,14 +18,16 @@ import { filtrar, montarArvore, nivel, pastasAte, porcento, type Ordem } from "@
 
 const INTERVALO_DE_CONSULTA = 1000;
 
+// =============================================================
+// Pagina Analise
+// -------------------------------------------------------------
+// Consulta a análise até ela terminar
+// =============================================================
 export default function PaginaAnalise() {
   const { id } = useParams<{ id: string }>();
   const [analise, setAnalise] = useState<Analise | null>(null);
   const [erro, setErro] = useState("");
 
-  // =============================================================
-  // Consulta repetida até a análise terminar
-  // =============================================================
   useEffect(() => {
     let ativo = true;
     let espera: ReturnType<typeof setTimeout>;
@@ -48,7 +44,6 @@ export default function PaginaAnalise() {
       } catch (e) {
         if (!ativo) return;
         setErro((e as Error).message);
-        // Queda momentânea do servidor não encerra a espera
         espera = setTimeout(consultar, 3 * INTERVALO_DE_CONSULTA);
       }
     }
@@ -113,7 +108,6 @@ function Resultados({ resultado }: { resultado: Resultado }) {
   const [busca, setBusca] = useState("");
   const [soAvaliados, setSoAvaliados] = useState(true);
 
-  // Abre de início o caminho até o arquivo mais arriscado
   const [abertas, setAbertas] = useState<Set<string>>(
     () => new Set(ranking[0] ? pastasAte(arvoreCompleta, ranking[0].caminho) : []),
   );
@@ -129,7 +123,6 @@ function Resultados({ resultado }: { resultado: Resultado }) {
     );
   }, [arvoreCompleta, busca, soAvaliados]);
 
-  // Com busca ativa, tudo que sobrou fica aberto
   const abertasEfetivas = useMemo(() => {
     if (!busca.trim()) return abertas;
     const todas = new Set<string>();

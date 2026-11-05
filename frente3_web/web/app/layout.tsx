@@ -1,5 +1,3 @@
-// frente3_web\web\app\layout.tsx
-
 /*
  * Moldura de todas as páginas: fontes, cabeçalho e rodapé.
  */
@@ -7,8 +5,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-// Fontes instaladas pelo npm, e não baixadas do Google na hora do
-// build: assim a apresentação funciona sem internet
 import "@fontsource-variable/inter";
 import "@fontsource-variable/jetbrains-mono";
 import "@fontsource-variable/unbounded";
@@ -17,9 +13,14 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "DefectLens",
-  description: "Probabilidade de defeito por arquivo em repositórios Python do GitHub",
+  description: "Risco de defeito nos commits recentes de repositórios Python do GitHub",
 };
 
+// =============================================================
+// Layout
+// -------------------------------------------------------------
+// Moldura comum: cabeçalho, conteúdo e rodapé
+// =============================================================
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR">
@@ -48,7 +49,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
         <footer className="rodape">
           DefectLens — Trabalho de Conclusão de Curso, Engenharia de Computação, UTFPR Apucarana.
-          As probabilidades priorizam a revisão; não são certeza de defeito.
+          As notas priorizam a revisão; não são certeza de defeito.
         </footer>
       </body>
     </html>

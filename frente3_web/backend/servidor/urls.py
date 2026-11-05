@@ -1,4 +1,3 @@
-# frente3_web\backend\servidor\urls.py
 """
 Rotas do servidor: a API fica em /api/, o painel do Django em /admin/.
 """

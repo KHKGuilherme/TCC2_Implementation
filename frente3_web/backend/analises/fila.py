@@ -1,16 +1,5 @@
-# frente3_web\backend\analises\fila.py
 """
 Roda as análises em segundo plano, uma de cada vez.
-
-Uma análise leva de segundos a vários minutos, e um pedido HTTP não
-pode ficar aberto esse tempo todo. O POST só registra o pedido e
-devolve; o trabalho acontece numa thread daqui, que vai escrevendo o
-progresso no banco, e a tela consulta o banco a cada segundo.
-
-Thread em vez de Celery de propósito: no Windows, Celery pede Redis
-e mais um processo aberto, e para um uso de TCC a thread basta. O
-limite é que a fila vive na memória do runserver — se ele reiniciar,
-a análise em andamento se perde, e a view marca isso como erro.
 """
 
 import logging
@@ -33,8 +22,6 @@ _executor = ThreadPoolExecutor(max_workers=settings.ANALISES_SIMULTANEAS,
 _ativas: set[str] = set()
 _trava = threading.Lock()
 
-# Intervalo mínimo entre duas gravações de progresso. Gravar a cada
-# arquivo medido seria milhares de escritas por análise.
 INTERVALO_DE_PROGRESSO = 0.7
 
 
@@ -45,8 +32,6 @@ INTERVALO_DE_PROGRESSO = 0.7
 # =============================================================
 def enfileirar(analise: Analise) -> None:
     with _trava:
-        # Fila vazia quer dizer nenhum clone em uso: o que estiver
-        # em clones/web sobrou de um servidor derrubado no meio
         if not _ativas:
             prever.limpar_clones_orfaos()
         _ativas.add(str(analise.id))
@@ -107,8 +92,6 @@ def executar(identificador: str) -> None:
                         concluida=timezone.now())
 
     except Exception as erro:
-        # Erro inesperado: o detalhe vai para o terminal do
-        # servidor, e a tela recebe uma linha só
         log.exception("análise %s falhou", identificador)
         consulta.update(status=Analise.Status.ERRO,
                         erro=f"Erro interno: {type(erro).__name__}: "

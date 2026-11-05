@@ -1,17 +1,6 @@
 """
 Limpa o dataset antes do treino e descreve o que as features têm.
 
-São três trabalhos, nesta ordem:
-
-  1. Diagnosticar  -> quanto falta, e de quê
-  2. Tratar        -> descarta o que não dá para salvar, preenche o resto
-  3. Descrever     -> matriz de correlação e mapa de calor
-
-A regra que manda no passo 2 é uma só: a MÉDIA VEM DO TREINO.
-Preencher um valor que falta no teste com a média do dataset
-inteiro colocaria informação do teste dentro do modelo, e a
-medição final deixaria de medir o que promete.
-
 CMD -> python frente1_treinamento/preparacao.py
        roda sozinho sobre dados/dataset.csv e só relata, sem treinar
 """
@@ -35,12 +24,13 @@ from extrator import derivadas, features
 # DIAGNÓSTICO
 # =============================================================
 
-# -------------------------------------------------------------
+
+# =============================================================
 # Juntar Commits
 # -------------------------------------------------------------
+# Acrescenta as métricas de commit ao dataset
+# =============================================================
 def juntar_commits(dados: pd.DataFrame) -> pd.DataFrame:
-    # Para o programa quando falta um commit: preencher com a média
-    # faria um repositório inteiro parecer de tamanho médio
     caminhos = sorted(config.PASTA_COMMITS.glob("*.csv"))
 
     if not caminhos:
@@ -62,17 +52,12 @@ def juntar_commits(dados: pd.DataFrame) -> pd.DataFrame:
     return juntos
 
 
-# -------------------------------------------------------------
+# =============================================================
 # Marcar Invalidos
 # -------------------------------------------------------------
+# Troca por vazio tudo que não é número utilizável
+# =============================================================
 def marcar_invalidos(dados: pd.DataFrame) -> pd.DataFrame:
-    # Converte em NaN tudo que não é número utilizável, para que
-    # exista um só conceito de "faltando" daqui para frente.
-    #
-    # O infinito aparece de verdade: a manutenibilidade do Radon é
-    # uma razão, e arquivo sem nenhuma instrução pode zerar o
-    # denominador. Deixar passar faria o StandardScaler produzir
-    # NaN em toda a coluna, e o modelo falharia longe daqui.
     limpo = dados.copy()
 
     for coluna in features.FEATURES:
@@ -82,13 +67,12 @@ def marcar_invalidos(dados: pd.DataFrame) -> pd.DataFrame:
     return limpo
 
 
-# -------------------------------------------------------------
+# =============================================================
 # Diagnosticar
 # -------------------------------------------------------------
+# Monta uma linha de diagnóstico por feature
+# =============================================================
 def diagnosticar(dados: pd.DataFrame) -> pd.DataFrame:
-    # Uma linha por feature, dizendo o que há de errado nela.
-    # Serve de tabela para a monografia e de conferência antes de
-    # qualquer tratamento.
     linhas = []
 
     for coluna in features.FEATURES:
@@ -112,9 +96,11 @@ def diagnosticar(dados: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(linhas)
 
 
-# -------------------------------------------------------------
+# =============================================================
 # Mostrar Diagnostico
 # -------------------------------------------------------------
+# Imprime o quadro de diagnóstico
+# =============================================================
 def mostrar_diagnostico(quadro: pd.DataFrame) -> None:
     print(f"\n  {'feature':<28} {'faltando':>9} {'%':>7} {'inf':>5} "
           f"{'zeros':>7} {'neg':>5} {'mínimo':>10} {'média':>10} "
@@ -132,15 +118,14 @@ def mostrar_diagnostico(quadro: pd.DataFrame) -> None:
 # TRATAMENTO
 # =============================================================
 
-# -------------------------------------------------------------
+
+# =============================================================
 # Descartar Linhas Inaproveitaveis
 # -------------------------------------------------------------
+# Tira as linhas com features demais faltando
+# =============================================================
 def descartar_linhas_inaproveitaveis(
         dados: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-    # Preencher com a média é razoável para um buraco isolado. Uma
-    # linha em que falta mais da metade das features não é uma
-    # linha com buraco: é uma linha inventada, porque a maioria dos
-    # valores seria a média. Essas saem.
     quantas = dados[features.FEATURES].isna().sum(axis=1)
     limite = int(len(features.FEATURES) * config.FRACAO_MAXIMA_FALTANTE)
 
@@ -148,42 +133,35 @@ def descartar_linhas_inaproveitaveis(
     return dados[manter].reset_index(drop=True), int((~manter).sum())
 
 
-# -------------------------------------------------------------
+# =============================================================
 # Medias do Treino
 # -------------------------------------------------------------
+# Calcula as médias só com as linhas de treino
+# =============================================================
 def medias_do_treino(treino: pd.DataFrame) -> pd.Series:
-    # O ponto metodológico do arquivo.
-    #
-    # A média sai SÓ do treino, e é essa mesma média que preenche
-    # os buracos do teste. Usar a média do dataset inteiro faria o
-    # conjunto reservado influenciar o modelo, e aí a avaliação
-    # final mediria algo melhor do que o modelo realmente é.
-    #
-    # É o mesmo motivo pelo qual o StandardScaler mora dentro do
-    # Pipeline em vez de ser aplicado antes da divisão.
     medias = treino[features.FEATURES].mean()
 
-    # Coluna inteiramente vazia no treino não tem média. Zero é a
-    # escolha menos danosa: a coluna fica constante e o modelo a
-    # ignora, em vez de o programa quebrar.
     return medias.fillna(0.0)
 
 
-# -------------------------------------------------------------
+# =============================================================
 # Preencher
 # -------------------------------------------------------------
+# Preenche os vazios com as médias do treino
+# =============================================================
 def preencher(dados: pd.DataFrame, medias: pd.Series) -> pd.DataFrame:
     cheio = dados.copy()
     cheio[features.FEATURES] = cheio[features.FEATURES].fillna(medias)
     return cheio
 
 
-# -------------------------------------------------------------
+# =============================================================
 # Preparar
 # -------------------------------------------------------------
+# Limpa os dois conjuntos e relata o que foi feito
+# =============================================================
 def preparar(treino: pd.DataFrame,
              teste: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Limpa os dois conjuntos e relata o que foi feito."""
     print("\n" + "-" * 70)
     print("PRÉ-PROCESSAMENTO")
     print("-" * 70)
@@ -220,10 +198,6 @@ def preparar(treino: pd.DataFrame,
     print(f"    treino : {buracos_treino}")
     print(f"    teste  : {buracos_teste}")
 
-    # Feature constante no treino não carrega informação: o modelo
-    # não tem como usá-la, e ela ainda estraga a matriz de
-    # correlação com NaN. Avisar é melhor que remover em silêncio,
-    # porque a causa costuma ser escopo pequeno demais.
     constantes = [c for c in features.FEATURES
                   if treino[c].nunique(dropna=True) <= 1]
     if constantes:
@@ -244,27 +218,24 @@ def preparar(treino: pd.DataFrame,
 # DESCRIÇÃO
 # =============================================================
 
-# -------------------------------------------------------------
+
+# =============================================================
 # Matriz de Correlacao
 # -------------------------------------------------------------
+# Correlação entre as features e o rótulo
+# =============================================================
 def matriz_de_correlacao(dados: pd.DataFrame,
                          metodo: str = "spearman") -> pd.DataFrame:
-    # Inclui o rótulo como última coluna, porque a linha dele é o
-    # que interessa: a correlação de cada feature com o defeito.
     colunas = features.FEATURES + [features.COLUNA_ALVO]
     return dados[colunas].corr(method=metodo)
 
 
-# -------------------------------------------------------------
+# =============================================================
 # Salvar Correlacoes
 # -------------------------------------------------------------
+# Grava as matrizes de Spearman e Pearson
+# =============================================================
 def salvar_correlacoes(dados: pd.DataFrame) -> pd.DataFrame:
-    # As duas, porque medem coisas diferentes:
-    #
-    #   pearson  -> relação linear. Sensível a cauda longa, e
-    #               churn e revisoes têm cauda longa.
-    #   spearman -> relação monótona, por postos. Robusta à cauda,
-    #               e é a que vale olhar aqui.
     config.PASTA_DADOS.mkdir(parents=True, exist_ok=True)
 
     spearman = matriz_de_correlacao(dados, "spearman")
@@ -277,14 +248,14 @@ def salvar_correlacoes(dados: pd.DataFrame) -> pd.DataFrame:
     return spearman
 
 
-# -------------------------------------------------------------
+# =============================================================
 # Mostrar Correlacao com o Alvo
 # -------------------------------------------------------------
+# Imprime a correlação com o rótulo e os pares redundantes
+# =============================================================
 def mostrar_correlacao_com_alvo(spearman: pd.DataFrame) -> None:
     coluna = spearman[features.COLUNA_ALVO].drop(features.COLUNA_ALVO)
 
-    # na_position para as constantes caírem no fim da lista em vez
-    # de no começo
     ordem = coluna.abs().sort_values(ascending=False,
                                      na_position="last").index
 
@@ -293,10 +264,6 @@ def mostrar_correlacao_com_alvo(spearman: pd.DataFrame) -> None:
     for nome in ordem:
         valor = coluna[nome]
 
-        # Coluna constante não tem correlação definida, e o NaN
-        # resultante quebraria a conta da barra. Acontece de
-        # verdade: 'eh_init' é zero em quase todo arquivo, e num
-        # recorte pequeno pode ser zero em todos.
         if pd.isna(valor):
             print(f"    {nome:<28} {'—':>7}  (constante no treino)")
             continue
@@ -304,9 +271,6 @@ def mostrar_correlacao_com_alvo(spearman: pd.DataFrame) -> None:
         barra = "#" * int(round(abs(valor) * 50))
         print(f"    {nome:<28} {valor:>+7.3f}  {barra}")
 
-    # Pares muito correlacionados entre si carregam a mesma
-    # informação. Vale saber antes de interpretar a importância
-    # das features, que se divide entre colunas redundantes.
     sem_alvo = spearman.drop(index=features.COLUNA_ALVO,
                              columns=features.COLUNA_ALVO)
     pares = []
@@ -318,8 +282,6 @@ def mostrar_correlacao_com_alvo(spearman: pd.DataFrame) -> None:
                               sem_alvo.loc[a, b]))
 
     if pares:
-        # Com 29 features existem 406 pares possíveis, e listar
-        # todos os redundantes enterraria o resto da saída
         pares.sort(reverse=True)
         mostrados = pares[:config.TOPO_PARES]
 
@@ -332,16 +294,15 @@ def mostrar_correlacao_com_alvo(spearman: pd.DataFrame) -> None:
               "importância se divide entre elas.")
 
 
-# -------------------------------------------------------------
+# =============================================================
 # Salvar Mapa de Calor
 # -------------------------------------------------------------
+# Desenha a matriz de correlação
+# =============================================================
 def salvar_mapa_de_calor(matriz: pd.DataFrame) -> bool:
-    # Importado aqui dentro, e não no topo, para que a falta do
-    # matplotlib não impeça o treino: o mapa é ilustração, o modelo
-    # é o resultado.
     try:
         import matplotlib
-        matplotlib.use("Agg")  # sem janela: só grava arquivo
+        matplotlib.use("Agg")
         import matplotlib.pyplot as plt
     except ImportError:
         print("\n  Mapa de calor não gerado: falta o matplotlib.")
@@ -352,15 +313,9 @@ def salvar_mapa_de_calor(matriz: pd.DataFrame) -> bool:
     valores = matriz.to_numpy(dtype=float)
     quantas = len(nomes)
 
-    # A figura cresce com o número de features. Com tamanho fixo,
-    # 29 features espremem as células e os números se sobrepõem
-    # até o mapa não servir para nada.
     lado = max(9.0, 0.42 * quantas + 3.5)
     figura, eixo = plt.subplots(figsize=(lado, lado * 0.85))
 
-    # vmin e vmax fixos em -1 e 1, e paleta divergente centrada no
-    # zero: sem isso a escala se ajusta aos dados e duas figuras
-    # de execuções diferentes deixam de ser comparáveis
     imagem = eixo.imshow(valores, cmap="RdBu_r", vmin=-1, vmax=1)
 
     fonte = 9 if quantas <= 16 else 7
@@ -370,15 +325,12 @@ def salvar_mapa_de_calor(matriz: pd.DataFrame) -> bool:
     eixo.set_xticklabels(nomes, rotation=45, ha="right", fontsize=fonte)
     eixo.set_yticklabels(nomes, fontsize=fonte)
 
-    # Acima de 16 features o número não cabe na célula. Nesse caso
-    # a cor sozinha comunica, e quem quer o valor exato abre o CSV.
     if quantas <= config.MAXIMO_ANOTADO:
         for i in range(quantas):
             for j in range(quantas):
                 valor = valores[i, j]
                 if np.isnan(valor):
                     continue
-                # Texto branco sobre célula escura, preto sobre clara
                 cor = "white" if abs(valor) > 0.55 else "black"
                 eixo.text(j, i, f"{valor:.2f}", ha="center", va="center",
                           color=cor, fontsize=fonte - 1)
@@ -398,13 +350,12 @@ def salvar_mapa_de_calor(matriz: pd.DataFrame) -> bool:
     return True
 
 
-# -------------------------------------------------------------
+# =============================================================
 # Descrever
 # -------------------------------------------------------------
+# Grava as correlações e o mapa de calor, a partir do treino
+# =============================================================
 def descrever(treino: pd.DataFrame) -> None:
-    """Grava as correlações e o mapa de calor, a partir do treino."""
-    # Do treino, e não do dataset inteiro: assim nenhuma tabela do
-    # trabalho depende de ter olhado o conjunto reservado.
     print("\n" + "-" * 70)
     print("CORRELAÇÃO ENTRE AS MÉTRICAS")
     print("-" * 70)
@@ -436,8 +387,6 @@ def main() -> None:
     features.conferir_contrato(dados.columns)
     dados = juntar_commits(dados)
 
-    # As mesmas derivadas que o treino usa, para o diagnóstico
-    # falar das features que o modelo realmente recebe
     dados = derivadas.acrescentar(dados, features.COLUNAS_BASE)
 
     print("=" * 70)

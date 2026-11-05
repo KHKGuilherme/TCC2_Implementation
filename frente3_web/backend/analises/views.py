@@ -1,11 +1,5 @@
-# frente3_web\backend\analises\views.py
 """
 Os endpoints da API.
-
-  GET  /api/modelo/          o modelo em uso e números gerais
-  GET  /api/analises/        análises concluídas recentes
-  POST /api/analises/        pede uma análise {endereco, ramo?}
-  GET  /api/analises/<id>/   progresso, e o resultado quando pronto
 """
 
 from django.db.models import Q
@@ -22,7 +16,6 @@ from .models import Analise
 from .serializers import (AnaliseDetalheSerializer, AnaliseResumoSerializer,
                           PedidoSerializer)
 
-# Quantas análises a lista de recentes mostra
 RECENTES = 8
 
 
@@ -32,7 +25,11 @@ RECENTES = 8
 # O que está treinado, e quanto já foi analisado
 # =============================================================
 class ModeloView(APIView):
-
+    # =============================================================
+    # Get
+    # -------------------------------------------------------------
+    # Devolve o modelo em uso e os números de uso
+    # =============================================================
     def get(self, request):
         try:
             modelo = prever.descrever_modelo()
@@ -61,10 +58,12 @@ class ModeloView(APIView):
 # Lista as recentes e recebe pedidos novos
 # =============================================================
 class AnalisesView(APIView):
-
+    # =============================================================
+    # Get
+    # -------------------------------------------------------------
+    # Lista as análises recentes, uma por repositório
+    # =============================================================
     def get(self, request):
-        # Uma por repositório, a mais nova, para a lista não ficar
-        # tomada por várias análises do mesmo projeto
         vistos, recentes = set(), []
         concluidas = (Analise.objects
                       .filter(status=Analise.Status.CONCLUIDA)
@@ -81,6 +80,11 @@ class AnalisesView(APIView):
 
         return Response(AnaliseResumoSerializer(recentes, many=True).data)
 
+    # =============================================================
+    # Post
+    # -------------------------------------------------------------
+    # Recebe um pedido, reaproveita ou enfileira
+    # =============================================================
     def post(self, request):
         pedido = PedidoSerializer(data=request.data)
         pedido.is_valid(raise_exception=True)
@@ -90,9 +94,6 @@ class AnalisesView(APIView):
                 pedido.validated_data["endereco"])
             ramo = pedido.validated_data.get("ramo") or ramo_da_url or ""
 
-            # Barato, um segundo: pergunta ao GitHub o commit atual
-            # sem clonar. Também já recusa repositório inexistente
-            # antes de ocupar a fila.
             commit = prever.commit_remoto(repositorio, ramo or None)
         except prever.ErroDeAnalise as erro:
             return Response({"erro": str(erro)},
@@ -102,18 +103,14 @@ class AnalisesView(APIView):
         if ramo:
             mesmo_repo &= Q(ramo=ramo)
 
-        # O mesmo commit já analisado dá o mesmo resultado: devolve
-        # o pronto em vez de refazer minutos de trabalho
         if commit:
             pronta = Analise.objects.filter(
                 mesmo_repo, commit=commit,
                 status=Analise.Status.CONCLUIDA).first()
-            # Análise gravada antes da revisão por commit tem outra nota
             if pronta and "revisao" in (pronta.resultado or {}):
                 return Response({"id": pronta.id, "reaproveitada": True},
                                 status=status.HTTP_200_OK)
 
-        # Pedido repetido enquanto a primeira ainda roda
         andamento = Analise.objects.filter(
             mesmo_repo, status__in=[Analise.Status.NA_FILA,
                                     Analise.Status.RODANDO]).first()
@@ -135,12 +132,14 @@ class AnalisesView(APIView):
 # Uma análise, consultada pela tela a cada segundo
 # =============================================================
 class AnaliseView(APIView):
-
+    # =============================================================
+    # Get
+    # -------------------------------------------------------------
+    # Devolve o progresso ou o resultado
+    # =============================================================
     def get(self, request, identificador):
         analise = get_object_or_404(Analise, pk=identificador)
 
-        # Pendente no banco e ausente da fila: o servidor reiniciou
-        # no meio. Sem isto a tela esperaria para sempre.
         if analise.pendente and not fila.esta_ativa(analise.id):
             analise.status = Analise.Status.ERRO
             analise.erro = ("A análise foi interrompida porque o servidor "

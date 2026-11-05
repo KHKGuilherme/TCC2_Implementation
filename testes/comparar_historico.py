@@ -1,12 +1,6 @@
 """
 Confere que a travessia retomável dá o mesmo resultado do PyDriller.
 
-A referência são os CSVs por repositório já gravados pelo PyDriller em
-dados/parciais. O teste mede o mesmo repositório com
-frente1_treinamento/historico_retomavel.py e compara as colunas de
-histórico, linha a linha. Depois repete a medição interrompendo a
-travessia no meio, e exige que a retomada chegue ao mesmo resultado.
-
 Uso:
     python testes/comparar_historico.py NOME_DO_REPOSITORIO
 """
@@ -75,7 +69,6 @@ def interromper_no_meio(pasta: Path, pedido: dict, ponto: Path) -> None:
 
     original = historico_retomavel.gravar_ponto
 
-    # A metade do trecho percorrido, que acaba no último commit pedido
     hashes = historico_rapido.listar_commits(pasta)
     metade = max(i for i, c in enumerate(hashes) if c in pedido) // 2
 
@@ -99,6 +92,8 @@ def interromper_no_meio(pasta: Path, pedido: dict, ponto: Path) -> None:
 
 # =============================================================
 # Main
+# -------------------------------------------------------------
+# Compara os dois caminhos e testa a retomada
 # =============================================================
 def main() -> None:
     nome = sys.argv[1]
@@ -115,13 +110,11 @@ def main() -> None:
     print(f"{nome}: {len(referencia)} linhas, {len(pedido)} commits pedidos, "
           f"{len(historico_rapido.listar_commits(pasta))} commits no clone")
 
-    # Direta, do início ao fim
     config.SEGUNDOS_ENTRE_PONTOS = 10 ** 9
     direta = historico_retomavel.medir_nos_commits(pasta, pedido, ponto)
     erros_direta = comparar(referencia, direta)
     print(f"  direta   : {erros_direta} diferenças")
 
-    # Cai na metade e retoma do ponto
     interromper_no_meio(pasta, pedido, ponto)
     if not ponto.exists():
         raise SystemExit("a queda não deixou ponto de retomada")

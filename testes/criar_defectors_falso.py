@@ -2,29 +2,7 @@
 criar_defectors_falso.py
 ========================
 
-Cria uma cópia reduzida e falsa do Defectors, para testar o
-pipeline sem precisar baixar os 2,2 GB do dataset verdadeiro.
-
-Gera parquets com exatamente as mesmas colunas do original
-(datetime, commit, repo, filepath, content, methods, lines),
-preenchidas a partir de repositórios Git de verdade: commits
-reais, caminhos reais e conteúdo real de cada arquivo naquele
-commit.
-
-O que é falso é apenas o rótulo, que é sorteado. Por isso o
-resultado não serve para nenhuma conclusão sobre o modelo —
-serve para confirmar que a montagem, o treino e a avaliação
-rodam, que o contrato de colunas fecha, e para estimar quanto
-tempo cada repositório leva.
-
-Como o rótulo é aleatório, o AUC esperado é próximo de 0,5.
-Um valor muito acima disso indica que alguma informação do
-rótulo está vazando para as features.
-
 Uso:
-
-    python testes/criar_defectors_falso.py \\
-        --repos caminho/do/clone:nome/no/github
 """
 
 import argparse
@@ -42,9 +20,10 @@ import config
 
 # =============================================================
 # executar_git — roda um comando git e devolve a saída
+# -------------------------------------------------------------
+# Devolve a saída do comando, ou string vazia se falhar
 # =============================================================
 def executar_git(pasta: Path, *argumentos: str) -> str:
-    """Devolve a saída do comando, ou string vazia se falhar."""
     resultado = subprocess.run(["git", "-C", str(pasta), *argumentos],
                                capture_output=True, timeout=300)
 
@@ -56,20 +35,12 @@ def executar_git(pasta: Path, *argumentos: str) -> str:
 
 # =============================================================
 # gerar_linhas — monta as linhas falsas de um repositório
+# -------------------------------------------------------------
+# Devolve linhas no formato do Defectors para um repositório
 # =============================================================
 def gerar_linhas(pasta: Path, nome_repo: str, qtd_commits: int,
                  arquivos_por_commit: int,
                  sorteio: random.Random) -> list[dict]:
-    """Devolve linhas no formato do Defectors para um repositório.
-
-    Sorteia commits do histórico, e dentro de cada um sorteia
-    arquivos .py, lendo o conteúdo que eles tinham naquele
-    momento.
-
-    Descarta o primeiro quinto do histórico. Commits muito
-    iniciais têm pouquíssimos arquivos e histórico quase vazio, o
-    que não representa o caso que a ferramenta vai enfrentar.
-    """
     linhas = []
 
     saida = executar_git(pasta, "log", "--reverse", "--format=%H|%cI")
@@ -99,8 +70,6 @@ def gerar_linhas(pasta: Path, nome_repo: str, qtd_commits: int,
             if not conteudo.strip():
                 continue
 
-            # Rótulo sorteado, com proporção parecida com a do
-            # Defectors real, que tem 44% de arquivos defeituosos.
             total_linhas = conteudo.count("\n") + 1
             if sorteio.random() < 0.44:
                 quantas = sorteio.randint(1, 5)
@@ -114,8 +83,6 @@ def gerar_linhas(pasta: Path, nome_repo: str, qtd_commits: int,
                 "commit":     hash_commit,
                 "repo":       nome_repo,
                 "filepath":   caminho,
-                # bytes e não str, e a coluna chamada 'lines',
-                # porque é assim que o Defectors publicado vem
                 "content":    conteudo.encode("utf-8"),
                 "methods":    [],
                 "lines":      linhas_do_defeito,
@@ -126,9 +93,10 @@ def gerar_linhas(pasta: Path, nome_repo: str, qtd_commits: int,
 
 # =============================================================
 # main — gera os parquets falsos
+# -------------------------------------------------------------
+# Lê os repositórios indicados e grava dois parquets
 # =============================================================
 def main() -> None:
-    """Lê os repositórios indicados e grava dois parquets."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repos", nargs="+", required=True,
                         help="pares caminho_local:nome/no/github")
@@ -159,16 +127,11 @@ def main() -> None:
         print("Nada gerado.")
         return
 
-    # Imita a árvore de pastas do Defectors verdadeiro, porque a
-    # montagem seleciona os parquets pelo caminho
     destino = (config.PASTA_DEFECTORS
                / config.SUBPASTA_DEFECTORS
                / config.ESQUEMA_DEFECTORS)
     destino.mkdir(parents=True, exist_ok=True)
 
-    # Três arquivos com os nomes das partições oficiais, para que o
-    # leitor seja exercitado lendo mais de um parquet, removendo
-    # duplicatas entre eles e preenchendo particao_defectors.
     tabela = pd.DataFrame(todas)
     cortes = [len(tabela) * 6 // 10, len(tabela) * 8 // 10]
 

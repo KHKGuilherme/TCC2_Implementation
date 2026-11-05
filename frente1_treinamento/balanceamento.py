@@ -1,3 +1,7 @@
+"""
+Iguala as classes no treino, quando ligado no config.
+"""
+
 import sys
 from pathlib import Path
 
@@ -59,8 +63,6 @@ def balancear(treino: pd.DataFrame) -> pd.DataFrame:
 
     nome = config.ESTRATEGIA_BALANCEAMENTO
 
-    # Para o programa em vez de cair num padrão silencioso: um erro
-    # de digitação aqui mudaria a composição do treino sem aviso
     if nome not in ESTRATEGIAS:
         raise SystemExit(
             f"ESTRATEGIA_BALANCEAMENTO = {nome!r} não existe.\n"

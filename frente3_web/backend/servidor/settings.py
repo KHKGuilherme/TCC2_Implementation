@@ -1,10 +1,5 @@
-# frente3_web\backend\servidor\settings.py
 """
 Configuração do Django da Frente 3.
-
-O pacote se chama 'servidor', e não 'config' como é costume, porque
-o projeto já tem um config.py na raiz, e o extrator importa ele
-pelo nome. Os dois no mesmo sys.path brigariam.
 """
 
 import os
@@ -15,10 +10,8 @@ from pathlib import Path
 # CAMINHOS
 # =============================================================
 
-# frente3_web/backend
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# D:\Code\TCC2, onde moram config.py, extrator e as outras frentes
 RAIZ_DO_PROJETO = BASE_DIR.parent.parent
 sys.path.insert(0, str(RAIZ_DO_PROJETO))
 
@@ -26,8 +19,6 @@ sys.path.insert(0, str(RAIZ_DO_PROJETO))
 # SEGURANÇA
 # =============================================================
 
-# A chave padrão serve só para rodar na máquina. Num servidor de
-# verdade ela vem da variável de ambiente.
 SECRET_KEY = os.environ.get("DEFECTLENS_SECRET_KEY",
                             "dev-apenas-local-troque-em-producao")
 
@@ -83,9 +74,6 @@ TEMPLATES = [
 # BANCO
 # =============================================================
 
-# SQLite basta: guarda o histórico de análises, e só uma é
-# processada por vez. O timeout cobre a escrita do progresso
-# disputando com a leitura da tela.
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
@@ -100,16 +88,12 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # API
 # =============================================================
 
-# Sem login: a ferramenta é pública e só lê repositórios públicos.
-# Sem autenticação também não há CSRF a exigir no POST.
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"],
     "UNAUTHENTICATED_USER": None,
 }
 
-# Quantas análises rodam ao mesmo tempo. Cada uma ocupa um núcleo
-# medindo código e o disco com um clone; 1 é o seguro.
 ANALISES_SIMULTANEAS = int(os.environ.get("DEFECTLENS_SIMULTANEAS", "1"))
 
 # =============================================================

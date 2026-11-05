@@ -1,3 +1,7 @@
+"""
+Separa treino e teste, e monta as dobras da validação.
+"""
+
 import sys
 from pathlib import Path
 
@@ -20,9 +24,6 @@ from extrator import features
 # Identificador único de um commit
 # =============================================================
 def chave_de_commit(dados: pd.DataFrame) -> np.ndarray:
-    # O rótulo e as métricas de commit são iguais em todos os arquivos
-    # do commit. Separar esses arquivos entre treino e teste entregaria
-    # a resposta ao modelo, porque o tamanho do commit o identifica.
     return (dados["repositorio"] + "::" + dados["commit"]).to_numpy()
 
 
@@ -30,32 +31,25 @@ def chave_de_commit(dados: pd.DataFrame) -> np.ndarray:
 # DIVISÃO TREINO / TESTE
 # =============================================================
 
+
+# =============================================================
+# Dividir Defectors
 # -------------------------------------------------------------
-# Dividir Defectors ( divisão oficial do dataset )
-# -------------------------------------------------------------
+# Usa a divisão oficial do dataset
+# =============================================================
 def dividir_defectors(dados: pd.DataFrame) -> pd.Series:
-    # O dataset já vem dividido. 'train' vira treino, 'test' e
-    # 'val' viram teste.
-    #
-    # Com ESQUEMA_DEFECTORS = "time", isso é treinar no passado e
-    # prever o futuro — e torna o resultado comparável com outros
-    # trabalhos que usam o mesmo benchmark.
     coluna = dados[features.COLUNA_PARTICAO_DEFECTORS].astype(str)
     return pd.Series(np.where(coluna.str.lower() == "train",
                               "treino", "teste"),
                      index=dados.index)
 
 
-# -------------------------------------------------------------
+# =============================================================
 # Dividir por Repositorio
 # -------------------------------------------------------------
+# Reserva projetos inteiros para o teste
+# =============================================================
 def dividir_por_repositorio(dados: pd.DataFrame) -> pd.Series:
-    # Reserva os projetos listados em REPOSITORIOS_TESTE.
-    # É a mais severa: nenhum arquivo e nenhuma convenção de
-    # código do projeto reservado foi vista no treino.
-    # Comparação exata: 'django' e 'django-rest-framework' são
-    # projetos diferentes, e um teste por substring reservaria os
-    # dois ao pedir só um
     alvos = {nome.lower() for nome in config.REPOSITORIOS_TESTE}
     reservado = dados["repositorio"].str.lower().isin(alvos)
 
@@ -63,16 +57,14 @@ def dividir_por_repositorio(dados: pd.DataFrame) -> pd.Series:
                      index=dados.index)
 
 
+# =============================================================
+# Dividir Train Test Split
 # -------------------------------------------------------------
-# Dividir Train Test Split ( train_test_split )
-# -------------------------------------------------------------
+# Sorteia linhas, de forma estratificada
+# =============================================================
 def dividir_train_test_split(dados: pd.DataFrame) -> pd.Series:
-    # O modo padrão do scikit-learn. Sorteia LINHAS.
-    # stratify mantém a mesma proporção de defeituosos nos dois
-    # lados, o que estabiliza as métricas entre execuções.
     y = dados[features.COLUNA_ALVO]
 
-    # stratify exige pelo menos duas linhas de cada classe
     estratificar = y if y.nunique() > 1 and y.value_counts().min() >= 2 else None
 
     indices_treino, indices_teste = train_test_split(
@@ -87,13 +79,12 @@ def dividir_train_test_split(dados: pd.DataFrame) -> pd.Series:
     return particao
 
 
+# =============================================================
+# Dividir Group Shuffle Split
 # -------------------------------------------------------------
-# Dividir Group Shuffle Split ( GroupShuffleSplit )
-# -------------------------------------------------------------
+# Sorteia commits inteiros para o teste
+# =============================================================
 def dividir_group_shuffle_split(dados: pd.DataFrame) -> pd.Series:
-    # Sorteia COMMITS em vez de linhas. Todos os arquivos de um commit
-    # vão para o mesmo lado. O mesmo arquivo pode aparecer nos dois
-    # lados, em commits diferentes, e projetos continuam misturados.
     divisor = GroupShuffleSplit(n_splits=1,
                                 test_size=config.FRACAO_TESTE,
                                 random_state=config.SEMENTE)
@@ -106,12 +97,12 @@ def dividir_group_shuffle_split(dados: pd.DataFrame) -> pd.Series:
     return particao
 
 
-# -------------------------------------------------------------
+# =============================================================
 # Dividir Sem Reserva
 # -------------------------------------------------------------
+# Deixa todas as linhas no treino
+# =============================================================
 def dividir_sem_reserva(dados: pd.DataFrame) -> pd.Series:
-    # Tudo é treino. Para quando a avaliação vai ser só por
-    # validação cruzada.
     return pd.Series("treino", index=dados.index)
 
 
@@ -119,13 +110,13 @@ def dividir_sem_reserva(dados: pd.DataFrame) -> pd.Series:
 # VALIDAÇÃO CRUZADA DENTRO DO TREINO
 # =============================================================
 
+
+# =============================================================
+# Validar Leave One Group Out
 # -------------------------------------------------------------
-# Validar Leave One Group Out ( LeaveOneGroupOut )
-# -------------------------------------------------------------
+# Dobras com um repositório de fora por vez
+# =============================================================
 def validar_leave_one_group_out(treino: pd.DataFrame):
-    # Treina em todos os repositórios menos um, testa no que
-    # sobrou. O número de dobras é o número de repositórios, então
-    # DOBRAS_VALIDACAO é ignorado. Exige pelo menos dois.
     grupos = treino["repositorio"].to_numpy()
     quantos = len(np.unique(grupos))
 
@@ -134,12 +125,12 @@ def validar_leave_one_group_out(treino: pd.DataFrame):
             f"{quantos} de fora por vez")
 
 
+# =============================================================
+# Validar Group KFold
 # -------------------------------------------------------------
-# Validar Group KFold ( GroupKFold )
-# -------------------------------------------------------------
+# Dobras em que nenhum commit se repete
+# =============================================================
 def validar_group_kfold(treino: pd.DataFrame):
-    # Nenhum commit aparece em duas dobras. Projetos continuam
-    # misturados entre elas.
     grupos = chave_de_commit(treino)
     dobras = min(config.DOBRAS_VALIDACAO, len(np.unique(grupos)))
 
@@ -147,16 +138,14 @@ def validar_group_kfold(treino: pd.DataFrame):
             f"GroupKFold por commit — {dobras} dobras")
 
 
+# =============================================================
+# Validar Stratified KFold
 # -------------------------------------------------------------
-# Validar Stratified KFold ( StratifiedKFold )
-# -------------------------------------------------------------
+# Dobras estratificadas pelo rótulo
+# =============================================================
 def validar_stratified_kfold(treino: pd.DataFrame):
-    # O padrão do scikit-learn para classificação. Mantém a
-    # proporção do rótulo em cada dobra, mas permite retratos do
-    # mesmo arquivo em dobras diferentes.
     y = treino[features.COLUNA_ALVO].to_numpy()
 
-    # Não existe estratificação com mais dobras que exemplos
     contagens = np.bincount(y)
     menor_classe = int(contagens[contagens > 0].min())
     dobras = max(2, min(config.DOBRAS_VALIDACAO, menor_classe))
@@ -164,8 +153,6 @@ def validar_stratified_kfold(treino: pd.DataFrame):
     divisor = StratifiedKFold(n_splits=dobras, shuffle=True,
                               random_state=config.SEMENTE)
 
-    # Devolve None no lugar dos grupos para manter a mesma
-    # interface das outras duas
     return (None, divisor,
             f"StratifiedKFold — {dobras} dobras, sem agrupamento")
 
@@ -199,9 +186,6 @@ ESTRATEGIAS_VALIDACAO = {
 def dividir(dados: pd.DataFrame) -> pd.Series:
     nome = config.ESTRATEGIA_DIVISAO
 
-    # Para o programa em vez de cair num padrão silencioso: um
-    # erro de digitação aqui mudaria o significado de todos os
-    # resultados do trabalho
     if nome not in ESTRATEGIAS_DIVISAO:
         raise SystemExit(
             f"ESTRATEGIA_DIVISAO = {nome!r} não existe.\n"
@@ -247,9 +231,6 @@ def validacao(treino: pd.DataFrame):
             f"Disponíveis: {', '.join(ESTRATEGIAS_VALIDACAO)}"
         )
 
-    # Com um repositório só, deixar um de fora não deixa nada para
-    # treinar. Cai para GroupKFold e avisa, para o número não ser
-    # lido como se medisse generalização entre projetos.
     if nome == "leave_one_group_out":
         if treino["repositorio"].nunique() < 2:
             grupos, divisor, texto = validar_group_kfold(treino)

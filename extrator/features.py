@@ -1,6 +1,6 @@
-# ==============================================================
-# Este arquivo define as Colunas e sua Ordem.
-# ==============================================================
+"""
+Define as colunas do dataset e a ordem delas.
+"""
 
 import sys
 from pathlib import Path
@@ -9,50 +9,48 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import config
 
-# Relativo porque 'extrator' é um pacote: assim funciona
-# independente de quem importa e de onde
 from . import derivadas
 
 # -------------------------------------------------------------
 # Como o código está escrito (Radon e Lizard)
 # -------------------------------------------------------------
 COLUNAS_CODIGO = [
-    "linhas",               # linhas de código efetivas, sem comentários nem vazias
-    "complexidade_media",   # complexidade ciclomática média entre as funções
-    "complexidade_maxima",  # complexidade da função mais complexa
-    "manutenibilidade",     # índice de 0 a 100, onde 100 é o melhor
-    "maior_funcao",         # número de linhas da maior função
-    "qtd_funcoes",          # quantas funções o arquivo tem
+    "linhas",
+    "complexidade_media",
+    "complexidade_maxima",
+    "manutenibilidade",
+    "maior_funcao",
+    "qtd_funcoes",
 ]
 
 # -------------------------------------------------------------
 # Grupos opcionais de código, ligados no config
 # -------------------------------------------------------------
 COLUNAS_COMENTARIOS = [
-    "comentarios",       # linhas de comentário
+    "comentarios",
     "linhas_em_branco",
 ]
 
 COLUNAS_HALSTEAD = [
-    "halstead_volume",       # tamanho do vocabulário usado
+    "halstead_volume",
     "halstead_dificuldade",
     "halstead_esforco",
-    "halstead_bugs",         # estimativa de defeitos do próprio Halstead
+    "halstead_bugs",
 ]
 
 COLUNAS_LIZARD = [
-    "tokens",             # símbolos do arquivo, tamanho sem depender de linha
-    "parametros_maximo",  # assinatura mais longa
+    "tokens",
+    "parametros_maximo",
     "parametros_media",
 ]
 
 COLUNAS_AST = [
-    "aninhamento_maximo",  # blocos de controle um dentro do outro
-    "todos_fixmes",        # TODO, FIXME, XXX e HACK nos comentários
-    "except_pelado",       # 'except:' sem tipo
+    "aninhamento_maximo",
+    "todos_fixmes",
+    "except_pelado",
     "qtd_try",
     "qtd_imports",
-    "imports_estrela",     # 'from x import *'
+    "imports_estrela",
     "qtd_classes",
     "qtd_decoradores",
     "qtd_global",
@@ -60,9 +58,9 @@ COLUNAS_AST = [
 
 COLUNAS_RUFF = [
     "ruff_total",
-    "ruff_bugbear",      # padrões que costumam virar bug
+    "ruff_bugbear",
     "ruff_seguranca",
-    "ruff_excecao",      # tratamento de erro problemático
+    "ruff_excecao",
     "ruff_simplificar",
     "ruff_refatorar",
     "ruff_argumentos",
@@ -73,49 +71,42 @@ COLUNAS_RUFF = [
 # Como o código evoluiu (PyDriller)
 # -------------------------------------------------------------
 COLUNAS_HISTORICO = [
-    "revisoes",   # quantos commits alteraram o arquivo
-    "autores",    # quantas pessoas diferentes o alteraram
-    "churn",      # total de linhas adicionadas mais removidas
+    "revisoes",
+    "autores",
+    "churn",
 ]
 
 # -------------------------------------------------------------
 # Grupos opcionais de histórico, ligados no config
 # -------------------------------------------------------------
 COLUNAS_TEMPORAL = [
-    "insercoes",            # linhas adicionadas, separadas das removidas
+    "insercoes",
     "remocoes",
-    "idade_dias",           # do primeiro commit do arquivo até este
-    "dias_desde_anterior",  # intervalo entre as duas últimas mudanças
-    "commits_recentes",     # na janela de JANELA_RECENTE_DIAS
+    "idade_dias",
+    "dias_desde_anterior",
+    "commits_recentes",
     "autores_recentes",
 ]
 
 COLUNAS_PROPRIEDADE = [
-    "fracao_autor_principal",  # parcela das mudanças feita por quem mais mexe
-    "autores_menores",         # contribuidores ocasionais
-    "arquivos_por_commit",     # tamanho típico dos commits que tocam o arquivo
+    "fracao_autor_principal",
+    "autores_menores",
+    "arquivos_por_commit",
 ]
 
-# -------------------------------------------------------------
-# Como é o commit (extrator/metricas_commit.py)
-# -------------------------------------------------------------
-# Os arquivos de um commit têm os mesmos valores. Não ficam no
-# dataset.csv: vêm de config.PASTA_COMMITS.
 COLUNAS_COMMIT = [
-    "commit_arquivos",     # arquivos alterados, de qualquer tipo
-    "commit_pastas",       # pastas diferentes tocadas
-    "commit_topos",        # pastas de primeiro nível tocadas
-    "commit_adicionadas",  # linhas adicionadas no commit inteiro
-    "commit_removidas",    # linhas removidas no commit inteiro
-    "commit_entropia",     # quão espalhada a mudança está, de 0 a 1
+    "commit_arquivos",
+    "commit_pastas",
+    "commit_topos",
+    "commit_adicionadas",
+    "commit_removidas",
+    "commit_entropia",
 ]
 
 # =============================================================
 # AS DUAS LISTAS, QUE SÃO COISAS DIFERENTES
 # =============================================================
 
-# Os grupos opcionais, com a chave do config que liga cada um.
-# A ordem aqui é a ordem das colunas no CSV.
 GRUPOS_MEDIDOS = [
     ("MEDIR_COMENTARIOS",  COLUNAS_COMENTARIOS),
     ("MEDIR_HALSTEAD",     COLUNAS_HALSTEAD),
@@ -151,19 +142,16 @@ FEATURES = (COLUNAS_BASE + derivadas.colunas_ativas(COLUNAS_BASE)
 # O QUE O MODELO PREVÊ
 # =============================================================
 
-# 1 para arquivo que ganhou linhas num commit marcado pelo Defectors
-# como causador de defeito, 0 para os demais. É uma marca do commit,
-# copiada para os arquivos dele.
 COLUNA_ALVO = "defeituoso"
 
 # =============================================================
 # COLUNAS QUE NÃO ENTRAM NO MODELO
 # =============================================================
 COLUNAS_IDENTIFICACAO = [
-    "repositorio",         # nome no GitHub, por exemplo numpy/numpy
-    "arquivo",             # caminho do .py dentro do repositório
-    "commit",              # commit no qual o arquivo foi medido
-    "particao_defectors",  # divisão oficial do dataset: train, test ou val
+    "repositorio",
+    "arquivo",
+    "commit",
+    "particao_defectors",
 ]
 
 
@@ -175,24 +163,19 @@ COLUNAS_DIAGNOSTICO = [
 # As duas divisões, que são coisas diferentes
 # -------------------------------------------------------------
 
-# A que o próprio Defectors entrega: train, test ou val.
-# Permite adotar a divisão oficial em vez de inventar uma.
 COLUNA_PARTICAO_DEFECTORS = "particao_defectors"
 
-# A que ESTE trabalho usa. Vale "treino" ou "teste".
-# Escolhida em ESTRATEGIA_DIVISAO.
 COLUNA_PARTICAO = "particao"
 
 # =============================================================
 # A ORDEM DAS COLUNAS NO CSV
 # =============================================================
 
-# COLUNAS_BASE e não FEATURES: o CSV guarda só o que foi medido.
-# As derivadas são recalculadas a cada treino, de graça.
 COLUNAS_CSV = (COLUNAS_IDENTIFICACAO
                + COLUNAS_BASE
                + COLUNAS_DIAGNOSTICO
                + [COLUNA_ALVO, COLUNA_PARTICAO])
+
 
 # =============================================================
 # Origem da Feature
@@ -200,13 +183,6 @@ COLUNAS_CSV = (COLUNAS_IDENTIFICACAO
 # De onde a informação daquela coluna veio
 # =============================================================
 def origem_da_feature(coluna: str) -> str:
-    """Classifica uma feature em commit, código, histórico, caminho ou mista.
-
-    Existe para o relatório de importância não mentir. Somar só as
-    colunas cruas de histórico ignora que 'revisoes_por_autor' e
-    'pct_churn' também são histórico, e faz parecer que ele parou
-    de pesar.
-    """
     nome = coluna[len(derivadas.PREFIXO_PERCENTIL):] \
         if coluna.startswith(derivadas.PREFIXO_PERCENTIL) else coluna
 
@@ -247,12 +223,6 @@ COLUNAS_CAMINHO_CONHECIDAS = set(derivadas.COLUNAS_CAMINHO)
 # Valida um conjunto de colunas
 # =============================================================
 def conferir_contrato(colunas) -> None:
-    """Interrompe o programa se faltar alguma coluna obrigatória.
-
-    Chamada antes de gravar o dataset e antes de treinar. A ideia
-    é que a divergência apareça aqui, de forma visível, em vez de
-    virar uma previsão errada mais adiante.
-    """
     faltando = [c for c in COLUNAS_CSV if c not in colunas]
     if faltando:
         raise ValueError(f"Colunas faltando no dataset: {faltando}")
@@ -264,12 +234,6 @@ def conferir_contrato(colunas) -> None:
 # Valida que o rótulo não é feature
 # =============================================================
 def conferir_sem_vazamento() -> None:
-    """Interrompe o programa se uma coluna de diagnóstico virar feature.
-
-    As colunas de diagnóstico derivam do rótulo. Se uma delas
-    entrasse na lista de features, o modelo atingiria acerto
-    perfeito e o resultado não significaria nada.
-    """
     proibidas = set(FEATURES) & (set(COLUNAS_DIAGNOSTICO)
                                  | {COLUNA_ALVO, COLUNA_PARTICAO})
     if proibidas:

@@ -1,17 +1,10 @@
-// frente3_web\web\components\CommitsRevisar.tsx
-
 /*
  * Commits recentes para revisar, do mais para o menos arriscado.
- *
- * É a resposta principal da análise. O rótulo do treino é do commit,
- * então a ordem que o modelo sustenta é entre commits. Os arquivos de
- * um commit aparecem juntos, e não como notas soltas quase iguais.
  */
 
 import type { Resultado } from "@/lib/api";
 import { nivel, porcento } from "@/lib/arvore";
 
-// Commit grande listaria dezenas de arquivos
 const ARQUIVOS_VISIVEIS = 4;
 
 interface Props {
@@ -29,10 +22,14 @@ export function formatarData(iso: string): string {
   return iso.split("-").reverse().join("/");
 }
 
+// =============================================================
+// Commits Revisar
+// -------------------------------------------------------------
+// Lista os commits recentes por risco
+// =============================================================
 export default function CommitsRevisar({ resultado, selecionado, selecionar }: Props) {
   const { revisao, modelo, repositorio } = resultado;
 
-  // Análise gravada antes da revisão por commit
   if (!revisao) return null;
 
   return (

@@ -1,4 +1,3 @@
-# frente3_web\backend\servidor\wsgi.py
 """
 Entrada WSGI, para quando a API for servida fora do runserver.
 """

@@ -1,4 +1,3 @@
-# frente3_web\backend\analises\urls.py
 """
 Rotas do app de análises, montadas sob /api/.
 """

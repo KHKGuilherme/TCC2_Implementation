@@ -1,16 +1,5 @@
 """
 Percorre o histórico de um repositório podendo retomar depois de uma queda.
-
-Faz o mesmo que extrator.metricas_historico.medir_nos_commits, com duas
-diferenças: lê os commits com o 'git log' de historico_rapido.py, e grava
-de tempos em tempos um ponto de retomada no disco.
-
-O cpython tem 134 mil commits, e o computador reinicia sem avisar. Sem o
-ponto, cada reinício jogaria fora a travessia inteira daquele repositório.
-
-As contas continuam sendo as do extrator: aplicar_commit e fotografar são
-os mesmos, sem cópia. A equivalência com o PyDriller é conferida por
-testes/comparar_historico.py.
 """
 
 import hashlib
@@ -27,7 +16,6 @@ import config
 from extrator import metricas_historico
 from frente2_predicao import historico_rapido
 
-# Muda quando o formato do ponto muda, para um ponto antigo ser ignorado
 VERSAO_DO_PONTO = 1
 
 
@@ -41,8 +29,6 @@ def assinatura_do_ponto(hashes: list[str],
     pedido = sorted((c, sorted(a)) for c, a in caminhos_por_commit.items())
     resumo = hashlib.sha1(json.dumps(pedido).encode("utf-8")).hexdigest()
 
-    # O clone refeito pode ter commits novos, e aí a posição gravada
-    # não vale mais. Por isso a lista inteira entra na comparação.
     lista = hashlib.sha1("\n".join(hashes).encode("ascii")).hexdigest()
 
     return {"versao": VERSAO_DO_PONTO, "commits": lista, "pedido": resumo}
@@ -127,8 +113,6 @@ def medir_nos_commits(pasta_repo: Path,
             historico_rapido.percorrer_commits(pasta_repo, restantes, trocas),
             start=feitos + 1):
 
-        # Uma diferença de ordem aqui deslocaria todas as métricas
-        # sem erro nenhum, então a conferência é por commit
         if commit.hash != hashes[posicao - 1]:
             raise RuntimeError(f"travessia fora de ordem no commit {posicao}")
 

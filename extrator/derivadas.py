@@ -1,10 +1,5 @@
 """
 Cria features novas a partir das 9 que já foram medidas.
-
-  razoes        -> divide pelo tamanho, sobra o que não é tamanho
-  desequilibrio -> o que as médias escondem
-  percentil     -> posição dentro do PRÓPRIO projeto
-  caminho       -> o que o nome do arquivo diz, sem ler o código
 """
 
 import sys
@@ -23,42 +18,34 @@ import config
 # =============================================================
 
 COLUNAS_RAZOES_FIXAS = [
-    "churn_por_revisao",     # tamanho típico de cada alteração
-    "churn_por_linha",       # quanto já foi reescrito, relativo ao tamanho
-    "revisoes_por_autor",    # concentração do trabalho
-    "linhas_por_funcao",     # tamanho médio de função
-    "fracao_maior_funcao",   # quanto a maior função domina o arquivo
+    "churn_por_revisao",
+    "churn_por_linha",
+    "revisoes_por_autor",
+    "linhas_por_funcao",
+    "fracao_maior_funcao",
 ]
 
-# Razões que dependem de grupos opcionais de medição.
-# nome da coluna -> (numerador, denominador)
 RAZOES_OPCIONAIS = {
-    # Densidade de comentário é clássica na literatura
     "densidade_comentarios":  ("comentarios", "linhas"),
     "tokens_por_linha":       ("tokens", "linhas"),
-    # Violações por linha, para o arquivo grande não liderar só
-    # por ser grande
     "ruff_por_linha":         ("ruff_total", "linhas"),
-    # Quanto do churn foi crescimento e quanto foi reescrita
     "fracao_insercoes":       ("insercoes", "churn"),
-    # Atividade recente contra atividade total
     "fracao_commits_recentes": ("commits_recentes", "revisoes"),
 }
 
 
 COLUNAS_DESEQUILIBRIO = [
-    "desequilibrio_complexidade",  # a pior função contra a média delas
-    "complexidade_por_linha",      # densidade de decisão na pior função
+    "desequilibrio_complexidade",
+    "complexidade_por_linha",
 ]
 
 COLUNAS_CAMINHO = [
-    "profundidade",           # quantas pastas até o arquivo
-    "eh_teste",               # 1 para arquivo de teste
-    "eh_init",                # 1 para __init__.py
+    "profundidade",
+    "eh_teste",
+    "eh_init",
     "comprimento_do_caminho",
 ]
 
-# O prefixo das colunas de percentil. Uma por feature medida.
 PREFIXO_PERCENTIL = "pct_"
 
 
@@ -77,27 +64,19 @@ def dividir(a: pd.Series, b: pd.Series) -> pd.Series:
 # Features que não escalam com o tamanho do arquivo
 # =============================================================
 def acrescentar_razoes(dados: pd.DataFrame) -> pd.DataFrame:
-    # 100 commits de 2 linhas e 100 commits de 200 linhas dão o
-    # mesmo 'revisoes' e são coisas completamente diferentes
     dados["churn_por_revisao"] = dividir(dados["churn"], dados["revisoes"])
 
-    # Arquivo de 50 linhas com 5.000 de churn foi reescrito 100
-    # vezes. Um de 5.000 linhas com o mesmo churn, uma vez.
     dados["churn_por_linha"] = dividir(dados["churn"], dados["linhas"])
 
     dados["revisoes_por_autor"] = dividir(dados["revisoes"],
                                           dados["autores"])
 
-    # O dataset tem a MAIOR função, nunca a média
     dados["linhas_por_funcao"] = dividir(dados["linhas"],
                                          dados["qtd_funcoes"])
 
     dados["fracao_maior_funcao"] = dividir(dados["maior_funcao"],
                                            dados["linhas"])
 
-    # As de baixo dependem de grupos de medição que podem estar
-    # desligados, então cada uma confere se a coluna existe. Sem
-    # isso, desligar MEDIR_RUFF quebraria o cálculo das razões.
     for nome, (a, b) in RAZOES_OPCIONAIS.items():
         if a in dados.columns and b in dados.columns:
             dados[nome] = dividir(dados[a], dados[b])
@@ -111,9 +90,6 @@ def acrescentar_razoes(dados: pd.DataFrame) -> pd.DataFrame:
 # O caso perigoso que a média esconde
 # =============================================================
 def acrescentar_desequilibrio(dados: pd.DataFrame) -> pd.DataFrame:
-    # Média 2 e máximo 3 é um arquivo uniforme. Média 2 e máximo 40
-    # é um monstro escondido entre funções simples. Hoje os dois
-    # têm complexidade_media parecida, e o modelo não os distingue.
     dados["desequilibrio_complexidade"] = dividir(
         dados["complexidade_maxima"], dados["complexidade_media"])
 
@@ -179,6 +155,12 @@ def acrescentar_percentil(dados: pd.DataFrame,
 # Para acrescentar um grupo: escreva a função e registre aqui
 # =============================================================
 
+
+# =============================================================
+# Colunas De Percentil
+# -------------------------------------------------------------
+# Os nomes das colunas de percentil
+# =============================================================
 def colunas_de_percentil(base: list[str]) -> list[str]:
     return [PREFIXO_PERCENTIL + c for c in colunas_para_percentil(base)]
 
@@ -253,12 +235,6 @@ def colunas_ativas(base: list[str]) -> list[str]:
 # Calcula e anexa as derivadas ligadas no config
 # =============================================================
 def acrescentar(dados: pd.DataFrame, base: list[str]) -> pd.DataFrame:
-    """Devolve uma cópia com as colunas derivadas.
-
-    Tem de ser chamada ANTES da divisão treino/teste, porque o
-    percentil é calculado dentro de cada repositório e precisa de
-    todos os arquivos dele.
-    """
     dados = dados.copy()
     ligados = grupos_ligados()
 

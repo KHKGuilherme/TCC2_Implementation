@@ -1,9 +1,5 @@
-# frente3_web\backend\analises\serializers.py
 """
 Formato JSON das análises, nas duas formas que a tela usa.
-
-  resumo  -> lista de análises recentes, sem o resultado pesado
-  detalhe -> uma análise, com progresso e, se pronta, o resultado
 """
 
 from rest_framework import serializers
@@ -38,15 +34,35 @@ class AnaliseResumoSerializer(serializers.ModelSerializer):
                   "criada", "concluida",
                   "avaliados", "risco_alto", "risco_maximo"]
 
+    # =============================================================
+    # Resumo
+    # -------------------------------------------------------------
+    # O resumo gravado, ou vazio
+    # =============================================================
     def _resumo(self, analise: Analise) -> dict:
         return analise.resumo or {}
 
+    # =============================================================
+    # Get Avaliados
+    # -------------------------------------------------------------
+    # Quantos arquivos foram avaliados
+    # =============================================================
     def get_avaliados(self, analise):
         return self._resumo(analise).get("avaliados")
 
+    # =============================================================
+    # Get Risco Alto
+    # -------------------------------------------------------------
+    # Quantos arquivos passaram do limiar
+    # =============================================================
     def get_risco_alto(self, analise):
         return self._resumo(analise).get("risco_alto")
 
+    # =============================================================
+    # Get Risco Maximo
+    # -------------------------------------------------------------
+    # A maior nota da análise
+    # =============================================================
     def get_risco_maximo(self, analise):
         return self._resumo(analise).get("risco_maximo")
 
@@ -65,11 +81,15 @@ class AnaliseDetalheSerializer(serializers.ModelSerializer):
                   "etapa", "progresso", "mensagem", "erro",
                   "criada", "concluida", "posicao_na_fila", "resultado"]
 
+    # =============================================================
+    # Get Posicao Na Fila
+    # -------------------------------------------------------------
+    # Quantas análises estão à frente desta
+    # =============================================================
     def get_posicao_na_fila(self, analise: Analise) -> int | None:
         if analise.status != Analise.Status.NA_FILA:
             return None
 
-        # Quantas pendentes chegaram antes desta
         return Analise.objects.filter(
             status__in=[Analise.Status.NA_FILA, Analise.Status.RODANDO],
             criada__lt=analise.criada).count()

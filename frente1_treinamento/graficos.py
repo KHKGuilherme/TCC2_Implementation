@@ -21,12 +21,9 @@ from extrator import features
 # Importa sob demanda e avisa se faltar
 # =============================================================
 def abrir_matplotlib():
-    # Importado aqui dentro para que a falta da biblioteca não
-    # impeça o treino: as figuras são ilustração, o modelo é o
-    # resultado
     try:
         import matplotlib
-        matplotlib.use("Agg")  # sem janela: só grava arquivo
+        matplotlib.use("Agg")
         import matplotlib.pyplot as plt
         return plt
     except ImportError:
@@ -64,8 +61,6 @@ def desenhar_barras(plt, valores: np.ndarray, nomes: list[str],
                     erro: np.ndarray | None = None) -> None:
     ordem = np.argsort(valores)
 
-    # Altura proporcional ao número de features: com 29 barras uma
-    # figura de altura fixa sobrepõe os rótulos
     altura = max(4.5, 0.3 * len(nomes) + 1.5)
     figura, eixo = plt.subplots(figsize=(10, altura))
 
@@ -117,9 +112,6 @@ def salvar_permutacao(plt, modelo, teste: pd.DataFrame,
                       nome_modelo: str) -> bool:
     from sklearn.inspection import permutation_importance
 
-    # Embaralhar uma coluna e reavaliar custa uma previsão inteira,
-    # e são 29 colunas vezes as repetições. Numa amostra o
-    # resultado é o mesmo e o tempo é tratável.
     amostra = teste
     if len(teste) > config.AMOSTRA_PERMUTACAO:
         amostra = teste.sample(n=config.AMOSTRA_PERMUTACAO,
@@ -163,8 +155,6 @@ def primeira_arvore(modelo):
     if arvores is None:
         return None
 
-    # O Gradient Boosting guarda uma matriz de árvores, o Random
-    # Forest uma lista
     arvores = np.asarray(arvores).ravel()
     return arvores[0] if len(arvores) else None
 
@@ -181,9 +171,8 @@ def desfazer_escala(modelo, arvore) -> None:
         return
 
     coluna = arvore.tree_.feature
-    folha = coluna < 0  # nó folha não tem feature nem limiar
+    folha = coluna < 0
 
-    # z = (x - media) / desvio  ->  x = z * desvio + media
     bruto = (arvore.tree_.threshold * escala.scale_[coluna]
              + escala.mean_[coluna])
 
@@ -209,24 +198,11 @@ def salvar_arvore(plt, modelo, nome_modelo: str) -> bool:
 
     figura, eixo = plt.subplots(figsize=(22, 11))
 
-    # Os limiares da árvore estão em unidades PADRONIZADAS, porque
-    # o StandardScaler vem antes dela no Pipeline. Desenhar assim
-    # produz "churn <= -0.299", que não quer dizer nada para quem
-    # lê: -0,299 é desvio padrão, não churn.
-    #
-    # Aqui os limiares voltam para a unidade original, só enquanto
-    # a figura é desenhada, e são restaurados no finally. O modelo
-    # já foi gravado em disco antes disto, então nem uma falha no
-    # meio afetaria o que foi salvo.
     original = arvore.tree_.threshold.copy()
 
     try:
         desfazer_escala(modelo, arvore)
 
-        # O corte de profundidade não é estética: uma árvore
-        # treinada em 97 mil linhas chega a 44 níveis e sai como
-        # uma mancha preta. Os primeiros níveis são os que mostram
-        # por onde o modelo começa a decidir.
         plot_tree(
             arvore,
             max_depth=config.PROFUNDIDADE_DO_GRAFICO,
@@ -263,7 +239,6 @@ def salvar_arvore(plt, modelo, nome_modelo: str) -> bool:
 # Gera as três figuras do modelo escolhido
 # =============================================================
 def desenhar(modelo, nome_modelo: str, teste: pd.DataFrame) -> None:
-    """Grava os gráficos do modelo em dados/."""
     plt = abrir_matplotlib()
     if plt is None:
         return

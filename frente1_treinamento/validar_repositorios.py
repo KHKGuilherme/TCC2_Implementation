@@ -1,16 +1,6 @@
 """
 Mede o modelo em projetos que ele nunca viu.
 
-Cada repositório fica de fora uma vez: o modelo treina nos outros e
-prevê todos os retratos dele. Responde à pergunta da Frente 2, "num
-projeto novo, quais commits são arriscados?", e não mexe em
-modelos/modelo.joblib.
-
-Usa o mesmo algoritmo do modelo final (config.MODELO_FINAL), com um
-processo por repositório. Cada repositório pronto vira um CSV em
-config.PASTA_VALIDACAO_REPOS, e a rodada seguinte pula os que já
-existem. Para refazer, apague a pasta.
-
 CMD -> python frente1_treinamento/validar_repositorios.py
        python frente1_treinamento/validar_repositorios.py --repo NOME
 """
@@ -49,14 +39,10 @@ def carregar_dataset() -> pd.DataFrame:
     features.conferir_contrato(dados.columns)
     dados = preparacao.juntar_commits(dados)
 
-    # As derivadas olham só para os valores do próprio repositório,
-    # então calcular antes de separar não passa nada entre projetos
     dados = derivadas.acrescentar(dados, features.COLUNAS_BASE)
     dados = preparacao.marcar_invalidos(dados)
     dados, _ = preparacao.descartar_linhas_inaproveitaveis(dados)
 
-    # Os retratos recentes saem do treino e da avaliação, como no
-    # treino principal
     return treinar.so_maduros(dados)
 
 
@@ -70,7 +56,6 @@ def prever_repositorio(dados: pd.DataFrame, nome: str) -> pd.DataFrame:
     treino = dados[~de_fora]
     teste = dados[de_fora]
 
-    # A média sai só dos outros projetos, como numa análise real
     medias = preparacao.medias_do_treino(treino)
     treino = preparacao.preencher(treino, medias)
     teste = preparacao.preencher(teste, medias)
@@ -170,8 +155,6 @@ def resumir_repositorio(previsoes: pd.DataFrame) -> dict:
 # AUC por retrato nas linhas que o treino principal reservou
 # =============================================================
 def comparar_com_conhecido(tudo: pd.DataFrame) -> pd.DataFrame:
-    # As mesmas linhas nos dois lados. Em previsoes.csv o modelo não
-    # viu o arquivo mas viu o projeto; aqui não viu nenhum dos dois.
     chave = ["repositorio", "arquivo", "commit"]
     conhecido = pd.read_csv(config.ARQUIVO_PREVISOES)
     juntas = conhecido.merge(tudo[chave + ["probabilidade"]], on=chave,
@@ -204,7 +187,6 @@ def comparar_com_conhecido(tudo: pd.DataFrame) -> pd.DataFrame:
 # =============================================================
 def gravar_resumo(tudo: pd.DataFrame, grandes: pd.DataFrame,
                   commits: pd.DataFrame) -> None:
-    # Tudo por commit, a unidade do rótulo e da tela de revisão
     resumo = {
         "repositorios":   int(tudo["repositorio"].nunique()),
         "auc":            round(float(roc_auc_score(commits["defeito"],
@@ -258,8 +240,6 @@ def mostrar_resultado() -> None:
               f"{100 * linha['topo_commit_20']:>8.1f}% "
               f"{linha['auc_arquivo']:>9.3f}")
 
-    # Repositório com poucos arquivos dá um AUC que é quase sorteio,
-    # e cada projeto pesaria igual na mediana
     grandes = resumo[resumo["arquivos"] >= config.MINIMO_ARQUIVOS_REPO]
     commits = treinar.risco_por_commit(tudo)
     print(f"\n  Mediana entre os {len(grandes)} repositórios com "
@@ -269,8 +249,6 @@ def mostrar_resultado() -> None:
                            ("auc_arquivo", "AUC por arquivo")):
         print(f"    {rotulo:<16}: {grandes[coluna].median():.3f}")
 
-    # A conta soma o topo de cada projeto, e cada topo só compara
-    # notas do mesmo modelo
     print(f"\n  Todos os {len(commits)} commits, base "
           f"{100 * commits['defeito'].mean():.1f}%")
     for fracao in config.FRACOES_POR_REPOSITORIO:

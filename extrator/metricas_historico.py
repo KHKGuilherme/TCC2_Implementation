@@ -1,18 +1,5 @@
 """
 Mede como um arquivo .py evoluiu até um commit, em três grupos.
-
-  base      -> revisões, autores e churn
-  temporal  -> idade, intervalo entre mudanças, atividade recente
-  propriedade -> concentração do trabalho entre os autores
-
-Tudo sai da MESMA travessia do histórico. Acrescentar um grupo não
-custa um segundo a mais de clone: o caro aqui é percorrer os
-commits, e isso já é feito uma vez só.
-
-A correção temporal é a regra que não pode ser quebrada: o
-acumulador avança commit a commit e é fotografado no commit
-rotulado, então cada linha enxerga apenas o passado dela. Nenhuma
-métrica olha para frente.
 """
 
 import sys
@@ -56,12 +43,8 @@ def acumulador_vazio() -> dict:
         "primeira":  None,
         "ultima":    None,
         "penultima": None,
-        # Quantos commits cada pessoa fez neste arquivo
         "por_autor": Counter(),
-        # (instante, autor) dentro da janela recente, podado a cada
-        # commit para o uso de memória não crescer com a história
         "recentes":  [],
-        # Soma dos tamanhos dos commits que tocaram o arquivo
         "soma_arquivos_por_commit": 0,
     }
 
@@ -72,8 +55,6 @@ def acumulador_vazio() -> dict:
 # Move o histórico de um caminho para outro
 # =============================================================
 def transferir(destino: dict, origem: dict) -> None:
-    # Chamado quando o arquivo é renomeado: sem isso, o histórico
-    # some e o arquivo renasce com idade zero
     destino["revisoes"] += origem["revisoes"]
     destino["autores"] |= origem["autores"]
     destino["churn"] += origem["churn"]
@@ -111,8 +92,6 @@ def podar(registro: dict, instante: float) -> None:
 # Incorpora um commit ao acumulador
 # =============================================================
 def aplicar_commit(acumulado: dict, commit) -> None:
-    # Numa variável porque modified_files é uma propriedade que
-    # recalcula o diff a cada acesso, e o diff é a parte cara
     mudancas = commit.modified_files
     tamanho_do_commit = len(mudancas)
     instante = commit.committer_date.timestamp()
@@ -172,8 +151,6 @@ def resumir_registro(registro: dict, instante: float) -> dict:
         primeira = registro["primeira"]
         penultima = registro["penultima"]
 
-        # A janela conta a partir do commit fotografado, não de
-        # hoje: é o que o modelo saberia naquele momento
         limite = instante - config.JANELA_RECENTE_DIAS * SEGUNDOS_POR_DIA
         recentes = [(q, a) for q, a in registro["recentes"] if q >= limite]
 
@@ -182,9 +159,6 @@ def resumir_registro(registro: dict, instante: float) -> dict:
             "remocoes":  registro["remocoes"],
             "idade_dias": round((instante - primeira) / SEGUNDOS_POR_DIA, 1)
                           if primeira is not None else 0.0,
-            # Intervalo entre as duas últimas alterações. Não uso
-            # "dias desde a última" porque o commit fotografado É
-            # uma alteração: aquilo daria zero sempre.
             "dias_desde_anterior": round(
                 (registro["ultima"] - penultima) / SEGUNDOS_POR_DIA, 1)
                 if penultima is not None else 0.0,
@@ -196,9 +170,6 @@ def resumir_registro(registro: dict, instante: float) -> dict:
         contagens = registro["por_autor"]
         maior = max(contagens.values(), default=0)
 
-        # Bird et al., "Don't touch my code!": arquivo com muitos
-        # contribuidores ocasionais tem mais defeito que arquivo
-        # com dono claro
         menores = sum(1 for n in contagens.values()
                       if revisoes and n / revisoes < config.FRACAO_AUTOR_MENOR)
 

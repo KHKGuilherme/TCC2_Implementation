@@ -1,24 +1,6 @@
 """
 Monta dados/dataset.csv a partir do Defectors.
 
-O Defectors traz código e rótulo, e nenhuma métrica. Calcular as
-9 features sobre isso é o trabalho deste arquivo.
-
-Duas etapas:
-
-  Etapa 1 -> uma passada nos parquets grandes, gravando um parquet
-             por repositório. Nada é medido, só redistribuído.
-
-  Etapa 2 -> um repositório por vez: mede o código, clona, mede o
-             histórico, grava o CSV daquele projeto, apaga o clone
-             e o parquet separado. Passa para o próximo.
-
-A etapa 2 é desse jeito por causa de duas restrições reais. Em
-disco, nunca existe mais de um clone de cada vez, e os 25 projetos
-juntos passariam de 20 GB. Em tempo, o CSV de cada projeto é
-durável: uma queda no décimo repositório custa o décimo, não os
-nove que já terminaram.
-
 CMD -> python frente1_treinamento/montar_dataset.py
        --listar             mostra os repositórios e os nomes exatos
        --repo NOME          processa só este repositório e grava o CSV dele
@@ -54,28 +36,12 @@ import historico_retomavel
 from extrator import features, metricas_codigo, metricas_historico
 
 
-# As colunas que identificam a linha. 'content' fica fora desta
-# lista porque é o código-fonte inteiro, e é por causa dele que a
-# leitura é feita em lotes.
 COLUNAS_DE_CHAVE = ["repo", "commit", "filepath"]
 
-# O artigo do Defectors documenta a coluna de rótulo como
-# 'induce_bug', mas os parquets publicados no Zenodo a chamam de
-# 'lines'. A lista existe para o programa aceitar as duas e não
-# travar por causa do nome.
 APELIDOS_DO_ROTULO = ("lines", "induce_bug", "bug_lines")
 
-# Como a coluna de rótulo passa a se chamar depois da separação.
-# Um nome só aqui dentro evita carregar o apelido do Zenodo por
-# todo o resto do programa.
 ROTULO_PADRAO = "linhas_com_defeito"
 
-# Esquema fixo dos parquets separados por repositório.
-#
-# Declarado à mão, e não deduzido dos dados, porque um lote em que
-# todos os arquivos estão limpos tem só listas vazias: o pyarrow
-# deduziria list<null> nesse lote e list<int64> no seguinte, e a
-# gravação quebraria no meio da separação.
 ESQUEMA_SEPARADO = pa.schema([
     ("repo",               pa.string()),
     ("commit",             pa.string()),
@@ -92,18 +58,12 @@ ESQUEMA_SEPARADO = pa.schema([
 # Descobre como a coluna de rótulo se chama neste parquet
 # =============================================================
 def nome_do_rotulo(caminho: Path) -> str:
-    # Lê só o cabeçalho do parquet, não os dados.
-    #
-    # schema_arrow e não schema: o segundo achata colunas de lista
-    # e devolve 'element' no lugar do nome verdadeiro.
     colunas = pq.ParquetFile(caminho).schema_arrow.names
 
     for apelido in APELIDOS_DO_ROTULO:
         if apelido in colunas:
             return apelido
 
-    # Para o programa em vez de seguir sem rótulo: sem ele não
-    # existe nada para prever
     raise SystemExit(
         f"Não achei a coluna de rótulo em {caminho.name}.\n"
         f"Procurei por: {', '.join(APELIDOS_DO_ROTULO)}\n"
@@ -118,11 +78,6 @@ def nome_do_rotulo(caminho: Path) -> str:
 # Acha os arquivos da tarefa e do esquema configurados
 # =============================================================
 def selecionar_parquets(pasta: Path) -> list[Path]:
-    # A seleção é pelo CAMINHO, não pelas colunas. As duas tarefas
-    # do Defectors têm exatamente as mesmas colunas: o que muda é
-    # o significado de 'content', que numa é o arquivo e na outra
-    # é o diff. Aceitar pelas colunas misturaria diffs no dataset
-    # e o erro não apareceria.
     encontrados = [c for c in sorted(pasta.rglob("*"))
                    if c.is_file() and ".parquet" in c.name]
 
@@ -191,12 +146,6 @@ def repositorio_incluido(repositorio: str) -> bool:
     if not config.REPOSITORIOS_INCLUIDOS:
         return True
 
-    # Comparação exata, não por pedaço do nome: 'django' e
-    # 'django-rest-framework' são dois projetos diferentes no
-    # dataset, e um teste por substring confundiria os dois.
-    #
-    # Os de teste entram sempre: esquecer de listá-los nos dois
-    # lugares deixaria o conjunto de teste vazio sem aviso.
     alvos = {n.lower() for n in config.REPOSITORIOS_INCLUIDOS}
     alvos |= {n.lower() for n in config.REPOSITORIOS_TESTE}
 
@@ -226,10 +175,6 @@ def arquivo_ignorado(caminho: str) -> bool:
 # Converte a lista de linhas com defeito em (quantidade, rótulo)
 # =============================================================
 def rotulo_do_registro(linhas_com_defeito) -> tuple[int, int]:
-    # Lista vazia -> arquivo limpo.
-    # O campo chega como lista, array do numpy ou None conforme a
-    # versão da biblioteca, e testar array com 'if' levanta
-    # exceção. Por isso a conversão é pelo tamanho.
     if linhas_com_defeito is None:
         return 0, 0
 
@@ -294,14 +239,6 @@ def listar_repositorios() -> None:
 # =============================================================
 def planejar_amostra(parquets: list[Path],
                      quantidade: int) -> set[tuple[str, str, str]]:
-    # Passada barata: lê nome, commit, caminho e rótulo, nunca o
-    # código. Conhece a população inteira em segundos.
-    #
-    # O sorteio é ESTRATIFICADO por (repositório, rótulo), então a
-    # amostra tem a mesma composição do dataset completo.
-    #
-    # Fazer isso antes de medir é o que dá a economia: o programa
-    # mede mil arquivos em vez de 213 mil.
     print(f"  planejando amostra de {quantidade} linhas "
           f"(passada barata, sem ler código)")
 
@@ -318,8 +255,6 @@ def planejar_amostra(parquets: list[Path],
 
     populacao = pd.concat(partes, ignore_index=True)
 
-    # Os mesmos filtros da medição, para sortear entre as linhas
-    # que de fato poderiam entrar
     dentro = populacao["repo"].map(repositorio_incluido)
     fora_do_caminho = populacao["filepath"].map(arquivo_ignorado)
     populacao = populacao[dentro & ~fora_do_caminho]
@@ -340,8 +275,6 @@ def planejar_amostra(parquets: list[Path],
         pedacos = []
 
         for _, grupo in populacao.groupby(["repo", "rotulo"]):
-            # Pelo menos uma linha por estrato, para nenhum
-            # repositório e nenhuma classe sumir da amostra
             quantas = max(1, round(len(grupo) * fracao))
             pedacos.append(grupo.sample(n=min(quantas, len(grupo)),
                                         random_state=config.SEMENTE))
@@ -362,10 +295,6 @@ def planejar_amostra(parquets: list[Path],
 # Grava em disco uma cópia reduzida do Defectors
 # =============================================================
 def extrair_amostra(quantidade: int, destino: Path) -> None:
-    # Escreve parquets com a MESMA estrutura de pastas do
-    # original, só com as linhas sorteadas, preservando a divisão
-    # oficial. Depois disso basta apontar PASTA_DEFECTORS para a
-    # pasta nova e o resto funciona sem mudança.
     parquets = exigir_parquets()
 
     print("=" * 70)
@@ -384,8 +313,6 @@ def extrair_amostra(quantidade: int, destino: Path) -> None:
                    / config.ESQUEMA_DEFECTORS)
     pasta_saida.mkdir(parents=True, exist_ok=True)
 
-    # Segunda passada, agora lendo tudo mas guardando só o que foi
-    # escolhido. É a única vez que o arquivo grande é aberto.
     total = 0
     for caminho in parquets:
         origem = particao_do_parquet(caminho)
@@ -430,30 +357,10 @@ def extrair_amostra(quantidade: int, destino: Path) -> None:
 # Mede, ou diz por que não mediu
 # =============================================================
 def medir_um_arquivo(caminho: str, codigo: str):
-    # Silencia o aviso que o Python emite ao compilar o arquivo
-    # MEDIDO. Projetos antigos escrevem expressões regulares como
-    # "\d" em vez de r"\d". O código é válido, a métrica sai
-    # correta, e são quatro linhas por arquivo — em mil arquivos o
-    # aviso esconde a barra de progresso e qualquer mensagem que
-    # importe.
-    #
-    # O filtro é pela MENSAGEM e não pela categoria, porque a
-    # categoria mudou de versão para versão: DeprecationWarning
-    # até o 3.13, SyntaxWarning no 3.14. A mensagem é a mesma.
-    #
-    # Escolher a mensagem em vez da categoria também evita engolir
-    # aviso de depreciação do Radon ou do Lizard, que é coisa que
-    # a gente quer ver.
-    #
-    # Vale só aqui dentro, então aviso vindo do código DESTE
-    # projeto continua aparecendo.
     with warnings.catch_warnings():
         warnings.filterwarnings(
             "ignore", message=".*invalid escape sequence.*")
 
-        # Os dois motivos aparecem separados no relatório: não
-        # fazer parse é código antigo ou quebrado, enquanto sem
-        # função é tipicamente um __init__.py vazio
         quantidade = metricas_codigo.contar_funcoes(caminho, codigo)
 
         if quantidade is None:
@@ -463,7 +370,6 @@ def medir_um_arquivo(caminho: str, codigo: str):
 
         medidas = metricas_codigo.medir(caminho, codigo)
         return medidas if medidas is not None else "nao_faz_parse"
-
 
 
 # =============================================================
@@ -485,11 +391,6 @@ def escrever_separados(parquets: list[Path], chaves_desejadas,
     pasta = pasta_separado()
     pasta.mkdir(parents=True, exist_ok=True)
 
-    # Um escritor aberto por repositório, criado na primeira linha
-    # que chega. Escrever lote a lote em vez de acumular é o que
-    # mantém o uso de memória independente do tamanho do projeto:
-    # 'content' é o código-fonte inteiro, e juntar as 43 mil linhas
-    # do ansible na memória antes de gravar não caberia.
     escritores: dict[str, pq.ParquetWriter] = {}
     contagem = {"lidas": 0, "fora_do_escopo": 0, "caminho_ignorado": 0,
                 "fora_da_amostra": 0, "separadas": 0}
@@ -508,9 +409,6 @@ def escrever_separados(parquets: list[Path], chaves_desejadas,
                 tabela = lote.to_pandas()
                 contagem["lidas"] += len(tabela)
 
-                # Na recuperação de alguns projetos, descartar o
-                # resto antes dos outros filtros é o que faz a
-                # passada custar pouco
                 if apenas is not None:
                     tabela = tabela[tabela["repo"].isin(apenas)]
 
@@ -538,9 +436,6 @@ def escrever_separados(parquets: list[Path], chaves_desejadas,
                 tabela = tabela.rename(columns={rotulo: ROTULO_PADRAO})
                 tabela["particao_defectors"] = origem
 
-                # O esquema exige binary, e a origem varia: no
-                # Zenodo 'content' é binary, no Defectors falso é
-                # string
                 tabela["content"] = [
                     v.encode("utf-8", errors="ignore")
                     if isinstance(v, str) else v
@@ -560,8 +455,6 @@ def escrever_separados(parquets: list[Path], chaves_desejadas,
 
                 print(".", end="", flush=True)
     finally:
-        # Fechar é obrigatório: o parquet só fica legível quando o
-        # rodapé é gravado, e isso acontece no close
         for escritor in escritores.values():
             escritor.close()
 
@@ -579,8 +472,6 @@ def separar_alguns(apenas: set[str]) -> list[str]:
     print(f"  Refazendo a separação de {len(pedidos)} "
           f"repositório(s): {', '.join(pedidos)}")
 
-    # A amostra é replanejada com a mesma semente, então sorteia as
-    # mesmas linhas de antes
     chaves_desejadas = None
     parquets = exigir_parquets()
     if config.TAMANHO_AMOSTRA > 0:
@@ -604,27 +495,12 @@ def separar_alguns(apenas: set[str]) -> list[str]:
 # Etapa 0: uma passada no Defectors, um parquet por projeto
 # =============================================================
 def separar_por_repositorio(apenas: set[str] | None = None) -> list[str]:
-    # Com 'apenas', regrava só os repositórios pedidos e não toca
-    # na marca nem nos outros parquets. É o caminho de recuperação
-    # de quem perdeu o parquet separado de um projeto sem ter o CSV
-    # dele: custa uma releitura dos parquets de origem, e não a
-    # remontagem de tudo.
     if apenas:
         return separar_alguns(apenas)
 
-    # É esta etapa que permite tratar um projeto por vez depois.
-    # Ela lê os parquets grandes UMA vez e redistribui as linhas;
-    # a alternativa seria reler os 2 GB a cada repositório.
-    #
-    # Nada é medido aqui, só movido. Por isso é rápida comparada
-    # com o que vem depois.
     pasta = pasta_separado()
     marca = pasta_de_trabalho() / "separado.pronto"
 
-    # A marca guarda a lista dos projetos, e não só o fato de ter
-    # terminado. Com APAGAR_SEPARADO ligado os parquets vão sendo
-    # consumidos, então a pasta vazia no fim é o esperado, e é a
-    # lista que diz o que ainda falta conferir.
     if marca.exists() and not config.FORCAR_MONTAGEM:
         registro = json.loads(marca.read_text(encoding="utf-8"))
         nomes = registro["repositorios"]
@@ -638,7 +514,6 @@ def separar_por_repositorio(apenas: set[str] | None = None) -> list[str]:
         print(f"    {caminho.name}  "
               f"({caminho.stat().st_size / 1e6:.0f} MB)")
 
-    # None -> separar tudo o que passar pelos filtros
     chaves_desejadas = None
     if config.TAMANHO_AMOSTRA > 0:
         print()
@@ -674,8 +549,6 @@ def separar_por_repositorio(apenas: set[str] | None = None) -> list[str]:
     print(f"\n  {len(nomes)} repositórios em {pasta}/ "
           f"({ocupado / 1e6:.0f} MB)")
 
-    # A marca vai por último. Sem ela a separação é refeita, em vez
-    # de ser lida pela metade depois de uma interrupção.
     (pasta_de_trabalho() / "separado.pronto").write_text(
         json.dumps({"assinatura": assinatura_da_fase1(),
                     "repositorios": nomes}, indent=2),
@@ -712,9 +585,6 @@ def medir_codigo_do_repo(nome: str, caminho: Path) -> pd.DataFrame:
                 contagem["grande_demais"] += 1
                 continue
 
-            # Cache pelo CONTEÚDO: o mesmo arquivo aparece em
-            # muitos commits, quase sempre idêntico. Como a chave é
-            # o texto, nunca devolve medida de outra versão.
             chave = hash(codigo)
             if chave in cache:
                 medidas = cache[chave]
@@ -734,8 +604,6 @@ def medir_codigo_do_repo(nome: str, caminho: Path) -> pd.DataFrame:
 
             linhas.append({
                 "repositorio": registro.repo,
-                # Barra normal sempre, para combinar com o que o
-                # extrator de histórico devolve
                 "arquivo":     registro.filepath.replace("\\", "/"),
                 "commit":      str(registro.commit),
                 "particao_defectors": registro.particao_defectors,
@@ -757,8 +625,6 @@ def medir_codigo_do_repo(nome: str, caminho: Path) -> pd.DataFrame:
 
     tabela = pd.DataFrame(linhas)
 
-    # O mesmo par pode aparecer em mais de um parquet, porque o
-    # Defectors distribui divisões separadas
     return tabela.drop_duplicates(
         subset=["repositorio", "arquivo", "commit"])
 
@@ -769,8 +635,6 @@ def medir_codigo_do_repo(nome: str, caminho: Path) -> pd.DataFrame:
 # Identifica a configuração usada, para validar o que foi salvo
 # =============================================================
 def assinatura_da_fase1() -> dict:
-    # Mudar qualquer um destes muda quais arquivos entram e quais
-    # métricas saem, então o resultado antigo deixa de valer
     return {
         "subpasta":  config.SUBPASTA_DEFECTORS,
         "esquema":   config.ESQUEMA_DEFECTORS,
@@ -781,13 +645,6 @@ def assinatura_da_fase1() -> dict:
         "tamanho_maximo": config.TAMANHO_MAXIMO_BYTES,
         "pastas":    list(config.PASTAS_IGNORADAS),
         "arquivos":  list(config.ARQUIVOS_IGNORADOS),
-
-        # Os grupos de medição entram na assinatura: ligar o ruff
-        # ou as métricas temporais acrescenta colunas ao CSV, e
-        # misturar parciais de configurações diferentes produziria
-        # um dataset com buracos sem explicação. Com isso, cada
-        # conjunto de grupos tem a sua pasta de parciais, e voltar
-        # atrás não descarta o trabalho já feito.
         "medidos":   sorted(
             chave for chave, _ in features.GRUPOS_MEDIDOS
             if getattr(config, chave, False)),
@@ -801,14 +658,9 @@ def assinatura_da_fase1() -> dict:
 # Subpasta dos parciais correspondente a esta configuração
 # =============================================================
 def pasta_de_trabalho() -> Path:
-    # Configurações diferentes gravam em pastas diferentes, então
-    # alternar entre a amostra piloto e o dataset completo não
-    # mistura resultados nem descarta o trabalho de nenhum dos dois
     texto = json.dumps(assinatura_da_fase1(), sort_keys=True)
     resumo = hashlib.sha1(texto.encode("utf-8")).hexdigest()[:10]
     return config.PASTA_PARCIAIS / resumo
-
-
 
 
 # =============================================================
@@ -817,10 +669,6 @@ def pasta_de_trabalho() -> Path:
 # Projetos da separação que ainda não têm CSV gravado
 # =============================================================
 def repositorios_pendentes() -> list[str]:
-    # Existe para o dataset pela metade não se passar por pronto.
-    # Sem esta conferência, uma montagem em que 5 dos 25 projetos
-    # falharam grava um dataset.csv válido, e toda execução
-    # seguinte o aceita e nunca mais tenta aqueles 5 — em silêncio.
     marca = pasta_de_trabalho() / "separado.pronto"
 
     if not marca.exists():
@@ -838,7 +686,6 @@ def repositorios_pendentes() -> list[str]:
             and not (pasta / f"{nome.replace('/', '__')}.csv").exists()]
 
 
-# Sufixo dos parciais que guardam só a medição de código
 SUFIXO_CODIGO = "__codigo.csv"
 
 
@@ -848,8 +695,6 @@ SUFIXO_CODIGO = "__codigo.csv"
 # Os parciais de repositório prontos, sem os de código
 # =============================================================
 def csvs_completos(pasta: Path) -> list[Path]:
-    # Um glob simples por "*.csv" pegaria também os parciais que
-    # têm só as colunas de código, e o dataset sairia com buracos
     return [c for c in sorted(pasta.glob("*.csv"))
             if not c.name.endswith(SUFIXO_CODIGO)]
 
@@ -865,9 +710,6 @@ def resumo_do_erro(erro: Exception) -> str:
     if not linhas:
         return type(erro).__name__
 
-    # O GitCommandError empilha o comando, o código de saída e a
-    # saída de erro do git, e termina numa aspa solta. A linha que
-    # explica a causa é a do git, não a primeira nem a última.
     for linha in linhas:
         if linha.startswith(("error:", "fatal:", "warning:")):
             return linha[:100]
@@ -881,9 +723,6 @@ def resumo_do_erro(erro: Exception) -> str:
 # Apaga uma pasta inteira e avisa quando não consegue
 # =============================================================
 def apagar_pasta(pasta: Path) -> bool:
-    # No Windows o git grava os objetos como somente leitura, e o
-    # rmtree comum apaga metade e desiste. Aqui cada arquivo
-    # recusado perde a marca e é apagado de novo.
     def liberar(funcao, caminho, _erro):
         try:
             Path(caminho).chmod(stat.S_IWRITE)
@@ -891,8 +730,6 @@ def apagar_pasta(pasta: Path) -> bool:
         except OSError:
             pass
 
-    # Logo depois do PyDriller a pasta vazia ainda pode estar presa
-    # por um instante, então a exclusão é repetida com uma espera
     for espera in (0, 1, 2, 4):
         if not pasta.exists():
             return True
@@ -917,10 +754,6 @@ def clone_valido(pasta: Path) -> bool:
     if not (pasta / ".git").exists():
         return False
 
-    # Só existir um .git não prova nada, e só 'rev-parse HEAD'
-    # também não: sem um .git inteiro o git sobe de pasta, encontra
-    # o repositório do próprio TCC e responde com o HEAD dele. Por
-    # isso a resposta precisa dizer que o repositório é este aqui.
     resultado = subprocess.run(
         ["git", "-C", str(pasta), "rev-parse",
          "--absolute-git-dir", "--verify", "HEAD"],
@@ -948,8 +781,6 @@ def clonar(repositorio: str, destino: Path) -> bool:
         if not apagar_pasta(destino):
             return False
 
-    # O dataset guarda 'celery', e o GitHub precisa de
-    # 'celery/celery'
     endereco = config.NOMES_NO_GITHUB.get(repositorio)
     if not endereco:
         print(f"nome fora de NOMES_NO_GITHUB, acrescente no config.py")
@@ -957,37 +788,16 @@ def clonar(repositorio: str, destino: Path) -> bool:
 
     destino.parent.mkdir(parents=True, exist_ok=True)
 
-    # Pasta vazia de propósito, para apontar core.hooksPath para
-    # ela
     sem_hooks = config.PASTA_CLONES / "_sem_hooks"
     sem_hooks.mkdir(parents=True, exist_ok=True)
 
     comando = [
         "git",
-
-        # Nenhum hook é copiado para o clone, e nenhum é
-        # executado. Se a máquina tiver um init.templateDir com um
-        # post-checkout — coisa que Husky e pre-commit deixam
-        # configurado —, o git copia esse hook para todo clone
-        # novo e então recusa executá-lo, por segurança, abortando
-        # o clone. Clonar sem hook nenhum resolve, e não custa
-        # nada: aqui o repositório é só leitura.
-        # --template vem depois porque, diferente de
-        # init.templateDir, ele também vence a variável de
-        # ambiente GIT_TEMPLATE_DIR
         "-c", f"core.hooksPath={sem_hooks}",
-
         "clone", "--quiet", f"--template={sem_hooks}",
-
-        # Sem --depth de propósito: um clone raso traz só os
-        # commits recentes e as 3 features de histórico ficariam
-        # todas iguais a 1
         f"https://github.com/{endereco}.git", str(destino),
     ]
 
-    # Duas tentativas. A primeira falha por queda de rede ou por
-    # clone interrompido antes, e nos dois casos o que sobrou na
-    # pasta impede a segunda, então ela é apagada no meio.
     for tentativa in (1, 2):
         resultado = subprocess.run(comando, capture_output=True,
                                    text=True, timeout=7200)
@@ -1013,8 +823,6 @@ def resolver_commits(pasta: Path, hashes: list[str]) -> dict[str, str]:
     if not hashes:
         return {}
 
-    # Todos de uma vez pela entrada padrão, em vez de uma chamada
-    # por commit: alguns repositórios têm milhares deles
     resultado = subprocess.run(
         ["git", "-C", str(pasta), "cat-file", "--batch-check"],
         input="\n".join(hashes) + "\n",
@@ -1027,8 +835,6 @@ def resolver_commits(pasta: Path, hashes: list[str]) -> dict[str, str]:
     mapa = {}
     for informado, linha in zip(hashes, resultado.stdout.splitlines()):
         partes = linha.split()
-        # Sucesso -> "<hash completo> commit <tamanho>"
-        # Falha   -> "<consulta> missing"
         if len(partes) >= 2 and partes[1] == "commit":
             mapa[informado] = partes[0]
 
@@ -1051,9 +857,6 @@ def arquivo_do_ponto(repositorio: str) -> Path:
 # Grava de modo que o CSV nunca exista pela metade
 # =============================================================
 def gravar_csv_atomico(tabela: pd.DataFrame, destino: Path) -> None:
-    # A existência do CSV é o que marca o repositório como pronto.
-    # Um reinício no meio da gravação direta deixaria um arquivo
-    # truncado que a rodada seguinte aceitaria como completo.
     temporario = destino.with_name(destino.name + ".tmp")
     tabela.to_csv(temporario, index=False, encoding="utf-8")
     os.replace(temporario, destino)
@@ -1068,19 +871,7 @@ def medir_historico_do_repo(repositorio: str,
                             tabela: pd.DataFrame) -> pd.DataFrame | None:
     pasta = config.PASTA_CLONES / repositorio.replace("/", "__")
 
-    # Duas tentativas, porque o modo típico de falha aqui é o
-    # pacote do clone estar corrompido:
-    #
-    #   error: inflate: data stream error
-    #   error: failed to unpack compressed delta
-    #
-    # Isso acontece quando a máquina morre no meio da gravação do
-    # clone. O dano é local, então apagar e clonar de novo resolve.
-    # Como 'clonar' reaproveita um clone válido, apagar antes é o
-    # que força o clone novo. Repositório que falha não deixa pasta
-    # para trás: o disco é limitado, e a próxima rodada clona de novo.
     for tentativa in (1, 2):
-        # Sem o nome: quem chama já o imprimiu
         print("clonando... " if tentativa == 1 else "clonando de novo... ",
               end="", flush=True)
 
@@ -1128,8 +919,6 @@ def medir_historico_do_clone(repositorio: str, pasta: Path,
 
     print(f"{len(mapa)}/{len(informados)} commits ", end="", flush=True)
 
-    # Para cada commit, de quais arquivos precisamos. É isso que
-    # permite fotografar só o necessário em vez do repositório inteiro.
     caminhos_por_commit: dict[str, set[str]] = {}
     for informado, arquivo in zip(tabela["commit"], tabela["arquivo"]):
         completo = mapa.get(informado)
@@ -1164,8 +953,6 @@ def medir_historico_do_clone(repositorio: str, pasta: Path,
             sem_historico += 1
             continue
 
-        # Grava o hash completo, para a linha poder ser conferida
-        # direto no repositório
         linha["commit"] = completo
         linha.update(medidas)
         linhas.append(linha)
@@ -1190,7 +977,6 @@ def medir_historico_do_clone(repositorio: str, pasta: Path,
 def gravar_dataset(partes: list[pd.DataFrame]) -> pd.DataFrame:
     dataset = pd.concat(partes, ignore_index=True)
 
-    # Remove linhas de parciais antigos que saíram do escopo
     dentro = dataset["repositorio"].map(repositorio_incluido)
     if not dentro.all():
         fora = sorted(dataset.loc[~dentro, "repositorio"].unique())
@@ -1199,9 +985,6 @@ def gravar_dataset(partes: list[pd.DataFrame]) -> pd.DataFrame:
               f"{', '.join(fora)}")
         dataset = dataset[dentro].reset_index(drop=True)
 
-    # A divisão é aplicada aqui, não guardada nos parciais. Medir é
-    # caro e dividir é instantâneo, então trocar de estratégia não
-    # exige remedir nada.
     dataset[features.COLUNA_PARTICAO] = divisao.dividir(dataset)
 
     features.conferir_contrato(dataset.columns)
@@ -1219,12 +1002,6 @@ def gravar_dataset(partes: list[pd.DataFrame]) -> pd.DataFrame:
 # Grava o dataset a partir dos CSVs que já existem
 # =============================================================
 def montar_com_os_prontos() -> pd.DataFrame:
-    # Para quando a montagem foi interrompida e você quer trabalhar
-    # com o que já terminou. Não lê parquet, não clona, não mede
-    # nada: só junta os CSVs por repositório que estão em disco.
-    #
-    # Por isso é instantâneo, e por isso não avança o trabalho —
-    # os repositórios que faltam continuam faltando.
     features.conferir_sem_vazamento()
     config.conferir_nomes()
 
@@ -1316,8 +1093,6 @@ def resumir(dataset: pd.DataFrame, falharam: list[str],
 # Executa as duas fases e grava o dataset
 # =============================================================
 def montar(apenas: str | None = None) -> pd.DataFrame | None:
-    # Com 'apenas', processa um repositório e grava só o CSV dele. O
-    # dataset fica para o --so-prontos, depois do último.
     features.conferir_sem_vazamento()
     config.conferir_nomes()
 
@@ -1350,12 +1125,6 @@ def montar(apenas: str | None = None) -> pd.DataFrame | None:
         raise SystemExit(f"'{apenas}' não está entre os repositórios "
                          f"da separação: {', '.join(nomes)}")
 
-    # Projetos sem CSV e sem parquet separado: a montagem anterior
-    # morreu entre apagar o parquet e gravar o CSV. Regravar só
-    # esses custa uma releitura dos parquets de origem, enquanto
-    # FORCAR_MONTAGEM descartaria todos os CSVs já prontos. Quem tem
-    # o CSV de código não precisa do parquet, e quem foi pulado não
-    # será medido.
     if not config.FORCAR_MONTAGEM:
         faltando = {
             nome for nome in nomes
@@ -1387,9 +1156,6 @@ def montar(apenas: str | None = None) -> pd.DataFrame | None:
         parcial = pasta_parciais / f"{base}.csv"
         parcial_codigo = pasta_parciais / f"{base}__codigo.csv"
 
-        # O CSV pronto é o que torna o progresso durável. Uma queda
-        # de energia no décimo repositório custa o décimo, não os
-        # nove anteriores.
         if parcial.exists() and not config.FORCAR_MONTAGEM:
             pronto = pd.read_csv(parcial)
             print(f"  [{ordem}/{len(nomes)}] {repositorio:<24} "
@@ -1409,21 +1175,11 @@ def montar(apenas: str | None = None) -> pd.DataFrame | None:
         tem_codigo = parcial_codigo.exists() and not config.FORCAR_MONTAGEM
 
         if not separado.exists() and not tem_codigo:
-            # A recuperação acima já tentou regravar este parquet,
-            # então chegar aqui significa que o projeto não tem
-            # nenhuma linha elegível nos parquets de origem
             print("sem parquet separado e sem linha elegível na origem")
             falharam.append(repositorio)
             continue
 
-        # A rede cai, o disco falha, um clone vem corrompido. Sem
-        # esta rede de proteção, qualquer um desses levaria embora
-        # também os repositórios que ainda não foram tentados.
         try:
-            # O CSV de código é gravado ANTES do clone, e por isso
-            # a parte barata nunca é refeita por causa da cara: se
-            # a máquina cair no meio do clone, a medição do código
-            # deste projeto continua valendo.
             if tem_codigo:
                 codigo = pd.read_csv(parcial_codigo)
                 print(f"código reaproveitado ({len(codigo)}) ",
@@ -1438,8 +1194,6 @@ def montar(apenas: str | None = None) -> pd.DataFrame | None:
 
                 codigo.to_csv(parcial_codigo, index=False, encoding="utf-8")
 
-                # Só depois de gravado o código: a interrupção
-                # nunca cai entre medir e salvar
                 if config.APAGAR_SEPARADO:
                     separado.unlink(missing_ok=True)
 
@@ -1450,16 +1204,6 @@ def montar(apenas: str | None = None) -> pd.DataFrame | None:
 
             resultado = medir_historico_do_repo(repositorio, codigo)
         except KeyboardInterrupt:
-            # Ctrl+C é intenção do usuário, não defeito.
-            #
-            # SystemExit e não 'raise': repassar o KeyboardInterrupt
-            # faria o Python despejar a pilha de chamadas, e uma
-            # parada pedida pelo usuário não deve se parecer com
-            # um erro.
-            #
-            # Também não grava o dataset: gravá-lo pela metade
-            # faria a próxima execução considerá-lo pronto e nunca
-            # mais tentar o que falta.
             raise SystemExit(
                 f"\n\n  Interrompido durante o {repositorio}.\n"
                 f"  Já estão gravados: {len(partes)} de {len(nomes)}. "
@@ -1527,7 +1271,6 @@ def main() -> None:
     config.conferir_local()
     config.conferir_nomes()
 
-    # O argumento sobrepõe o config, para experimentar sem editar arquivo
     if argumentos.amostra is not None:
         config.TAMANHO_AMOSTRA = argumentos.amostra
 

@@ -1,21 +1,6 @@
-# frente2_predicao\prever.py
 """
 Frente 2 — estima o risco de o último commit de cada arquivo ter
 introduzido um defeito, num repositório inédito.
-
-  endereço -> clone -> mede cada .py -> lê o histórico -> derivadas
-           -> mesmo pré-processamento do treino -> modelo -> risco
-           -> commits recentes para revisar
-
-Usa o MESMO extrator da Frente 1 para tudo que vira feature. A única
-peça própria daqui é a leitura do histórico (historico_rapido.py),
-que entrega ao extrator os mesmos dados que o PyDriller entregaria,
-só que de uma vez.
-
-Cada arquivo é medido como está no último commit do repositório, com
-as métricas do último commit que o alterou. A nota é uma ordem de
-prioridade: ela não foi calibrada, e o rótulo é uma marca automática,
-então 70% não quer dizer 70% de chance real.
 
 CMD -> python frente2_predicao/prever.py psf/black
        mostra os arquivos mais arriscados no terminal
@@ -52,9 +37,6 @@ from frente2_predicao import historico_rapido
 # O QUE A TELA MOSTRA DE CADA ARQUIVO
 # =============================================================
 
-# Medidas exibidas no painel do arquivo, com o percentil dele
-# dentro do repositório. "melhor" diz para que lado o valor é bom,
-# só para a tela pintar a barra; o modelo não usa isso.
 METRICAS_EXIBIDAS = [
     ("linhas",                 "Linhas de código",            "menor"),
     ("complexidade_maxima",    "Complexidade máxima",         "menor"),
@@ -72,7 +54,6 @@ METRICAS_EXIBIDAS = [
     ("idade_dias",             "Idade (dias)",                "maior"),
 ]
 
-# Por que um arquivo não recebeu nota. A tela usa o texto.
 SITUACOES = {
     "avaliado":    "avaliado pelo modelo",
     "teste":       "arquivo de teste: o Defectors não tem testes, "
@@ -84,14 +65,11 @@ SITUACOES = {
     "sem_funcoes": "não tem nenhuma função, como no treino",
 }
 
-# dono/repo, com ou sem https://github.com/, com ou sem .git, e
-# opcionalmente /tree/<ramo> no fim, como o navegador mostra
 PADRAO_ENDERECO = re.compile(
     r"^(?:https?://)?(?:www\.)?(?:github\.com/)?"
     r"(?P<dono>[A-Za-z0-9_.-]+)/(?P<repo>[A-Za-z0-9_.-]+?)(?:\.git)?"
     r"(?:/tree/(?P<ramo>[^?#]+))?/?$")
 
-# O mesmo critério de derivadas.acrescentar_caminho
 PASTA_DE_TESTE = re.compile(r"(?:^|/)tests?/")
 
 
@@ -120,13 +98,14 @@ def interpretar_endereco(texto: str) -> tuple[str, str | None]:
 # CARREGAMENTO DO MODELO
 # =============================================================
 
-# -------------------------------------------------------------
+
+# =============================================================
 # Carregar Modelo
 # -------------------------------------------------------------
+# Lê o modelo uma vez e confere as features
+# =============================================================
 @lru_cache(maxsize=1)
 def carregar_modelo() -> dict:
-    # Uma vez por processo: o servidor web chama isto a cada
-    # análise, e ler o joblib leva alguns segundos
     caminho = RAIZ / config.ARQUIVO_MODELO
 
     if not caminho.exists():
@@ -136,9 +115,6 @@ def carregar_modelo() -> dict:
 
     pacote = joblib.load(caminho)
 
-    # O modelo espera as colunas na ordem do treino. Se o config
-    # mudou depois, o extrator produziria outra lista, e o modelo
-    # receberia valores trocados sem reclamar.
     if list(pacote["features"]) != list(features.FEATURES):
         raise ErroDeAnalise(
             "O modelo foi treinado com outra configuração de features. "
@@ -147,9 +123,11 @@ def carregar_modelo() -> dict:
     return pacote
 
 
-# -------------------------------------------------------------
+# =============================================================
 # Importancias
 # -------------------------------------------------------------
+# As features de maior peso no modelo
+# =============================================================
 def importancias(pacote: dict, quantas: int = 10) -> list[dict]:
     modelo = pacote["modelo"]
     final = modelo[-1] if hasattr(modelo, "steps") else modelo
@@ -166,12 +144,12 @@ def importancias(pacote: dict, quantas: int = 10) -> list[dict]:
             for nome, peso in pares[:quantas]]
 
 
-# -------------------------------------------------------------
+# =============================================================
 # Ler Resumo de Projeto Novo
 # -------------------------------------------------------------
+# Lê os números de projeto nunca visto
+# =============================================================
 def ler_resumo_projeto_novo() -> dict | None:
-    # Sai de validar_repositorios.py. É a medida que corresponde ao
-    # uso da Frente 2, que só recebe repositórios fora do treino.
     caminho = RAIZ / config.ARQUIVO_RESUMO_PROJETO_NOVO
 
     if not caminho.exists():
@@ -180,9 +158,11 @@ def ler_resumo_projeto_novo() -> dict | None:
     return json.loads(caminho.read_text(encoding="utf-8"))
 
 
-# -------------------------------------------------------------
+# =============================================================
 # Descrever Modelo
 # -------------------------------------------------------------
+# Reúne o que a tela mostra sobre o modelo
+# =============================================================
 def descrever_modelo() -> dict:
     pacote = carregar_modelo()
 
@@ -194,7 +174,6 @@ def descrever_modelo() -> dict:
         "projeto_novo": ler_resumo_projeto_novo(),
         "treinado_em": pacote.get("treinado_em"),
         "repositorios_treino": pacote.get("repositorios_treino"),
-        # Modelo gravado antes das médias irem para o joblib
         "tem_medias":  "medias" in pacote,
         "importancias": importancias(pacote),
     }
@@ -204,22 +183,24 @@ def descrever_modelo() -> dict:
 # GIT
 # =============================================================
 
-# -------------------------------------------------------------
+
+# =============================================================
 # Rodar Git
 # -------------------------------------------------------------
+# Executa o git sem nunca pedir senha
+# =============================================================
 def rodar_git(argumentos: list[str], timeout: int) -> subprocess.CompletedProcess:
-    # GIT_TERMINAL_PROMPT=0: repositório privado ou inexistente
-    # pede usuário e senha, e sem isto o servidor ficaria parado
-    # esperando alguém digitar
     ambiente = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
 
     return subprocess.run(["git", *argumentos], capture_output=True,
                           timeout=timeout, env=ambiente)
 
 
-# -------------------------------------------------------------
+# =============================================================
 # Motivo do Erro do Git
 # -------------------------------------------------------------
+# Extrai uma mensagem legível do erro do git
+# =============================================================
 def motivo_do_git(saida: bytes) -> str:
     texto = saida.decode("utf-8", errors="replace")
 
@@ -233,15 +214,12 @@ def motivo_do_git(saida: bytes) -> str:
     return texto.strip()[:200] or "o git falhou sem mensagem"
 
 
-# -------------------------------------------------------------
+# =============================================================
 # Commit Remoto
 # -------------------------------------------------------------
+# O hash da ponta do ramo, sem clonar. None se não der
+# =============================================================
 def commit_remoto(repositorio: str, ramo: str | None) -> str | None:
-    """O hash da ponta do ramo, sem clonar. None se não der.
-
-    Serve para reaproveitar uma análise já feita: se o commit não
-    mudou, o resultado também não muda.
-    """
     alvo = f"refs/heads/{ramo}" if ramo else "HEAD"
 
     try:
@@ -263,26 +241,22 @@ def commit_remoto(repositorio: str, ramo: str | None) -> str | None:
     return linhas[0]
 
 
-# -------------------------------------------------------------
+# =============================================================
 # Clonar
 # -------------------------------------------------------------
+# Clona o repositório com o histórico completo
+# =============================================================
 def clonar(repositorio: str, ramo: str | None, destino: Path) -> None:
-    # Pasta vazia para os hooks, pelo mesmo motivo do montador da
-    # Frente 1: um init.templateDir com post-checkout aborta o clone
     sem_hooks = RAIZ / config.PASTA_CLONES / "_sem_hooks"
     sem_hooks.mkdir(parents=True, exist_ok=True)
 
     comando = ["-c", f"core.hooksPath={sem_hooks}",
                "clone", "--quiet", f"--template={sem_hooks}",
-               # Só o ramo analisado: o histórico percorrido é o
-               # dele, os outros ramos seriam download à toa
                "--single-branch", "--no-tags"]
 
     if ramo:
         comando += ["--branch", ramo]
 
-    # Sem --depth: um clone raso deixaria as features de histórico
-    # todas iguais a 1
     comando += [f"https://github.com/{repositorio}.git", str(destino)]
 
     try:
@@ -295,13 +269,12 @@ def clonar(repositorio: str, ramo: str | None, destino: Path) -> None:
         raise ErroDeAnalise(motivo_do_git(resultado.stderr))
 
 
-# -------------------------------------------------------------
+# =============================================================
 # Apagar Pasta
 # -------------------------------------------------------------
+# Apaga uma pasta, incluindo arquivos somente leitura
+# =============================================================
 def apagar_pasta(pasta: Path) -> None:
-    # No Windows o git grava os objetos como somente leitura, e o
-    # rmtree comum apaga metade e desiste em silêncio. Aqui cada
-    # arquivo recusado perde a marca e é apagado de novo.
     def liberar(funcao, caminho, _erro):
         try:
             Path(caminho).chmod(stat.S_IWRITE)
@@ -318,24 +291,23 @@ def apagar_pasta(pasta: Path) -> None:
         shutil.rmtree(pasta, onerror=liberar)
 
 
-# -------------------------------------------------------------
+# =============================================================
 # Limpar Clones Orfaos
 # -------------------------------------------------------------
+# Apaga o que sobrou de análises interrompidas
+# =============================================================
 def limpar_clones_orfaos() -> None:
-    """Apaga o que sobrou de análises interrompidas.
-
-    Só pode ser chamada com nenhuma análise rodando: apaga tudo
-    em clones/web. O servidor chama quando a fila está vazia.
-    """
     pasta = RAIZ / config.PASTA_CLONES / "web"
     if pasta.exists():
         for sobra in pasta.iterdir():
             apagar_pasta(sobra)
 
 
-# -------------------------------------------------------------
+# =============================================================
 # Listar Arquivos Python
 # -------------------------------------------------------------
+# Lista os .py rastreados pelo git
+# =============================================================
 def listar_arquivos_python(pasta: Path) -> list[str]:
     resultado = rodar_git(["-C", str(pasta), "-c", "core.quotepath=off",
                            "ls-files", "-z", "--", "*.py"], timeout=120)
@@ -348,14 +320,15 @@ def listar_arquivos_python(pasta: Path) -> list[str]:
 # MEDIÇÃO
 # =============================================================
 
-# -------------------------------------------------------------
+
+# =============================================================
 # Classificar Caminho
 # -------------------------------------------------------------
+# A situação decidida só pelo nome, ou None se precisa medir
+# =============================================================
 def classificar_caminho(caminho: str) -> str | None:
-    """A situação decidida só pelo nome, ou None se precisa medir."""
     nome = caminho.rsplit("/", 1)[-1]
 
-    # Os mesmos filtros do montador da Frente 1
     if any(caminho.startswith(p) for p in config.PASTAS_IGNORADAS):
         return "ignorado"
     if nome in config.ARQUIVOS_IGNORADOS:
@@ -368,9 +341,11 @@ def classificar_caminho(caminho: str) -> str | None:
     return None
 
 
-# -------------------------------------------------------------
+# =============================================================
 # Medir Um Arquivo
 # -------------------------------------------------------------
+# Mede um arquivo, ou diz por que não mediu
+# =============================================================
 def medir_um_arquivo(pasta: Path, caminho: str) -> tuple[str, dict | None]:
     situacao = classificar_caminho(caminho)
     if situacao:
@@ -388,8 +363,6 @@ def medir_um_arquivo(pasta: Path, caminho: str) -> tuple[str, dict | None]:
     if len(codigo) > config.TAMANHO_MAXIMO_BYTES:
         return "grande", None
 
-    # O mesmo filtro de aviso do montador: código antigo com "\d"
-    # sem r"" encheria o log do servidor
     with warnings.catch_warnings():
         warnings.filterwarnings(
             "ignore", message=".*invalid escape sequence.*")
@@ -408,9 +381,11 @@ def medir_um_arquivo(pasta: Path, caminho: str) -> tuple[str, dict | None]:
     return "avaliado", medidas
 
 
-# -------------------------------------------------------------
+# =============================================================
 # Medir Codigo
 # -------------------------------------------------------------
+# Mede todos os arquivos e avisa o progresso
+# =============================================================
 def medir_codigo(pasta: Path, caminhos: list[str],
                  avisar) -> tuple[dict, dict]:
     medidos, situacoes = {}, {}
@@ -428,9 +403,11 @@ def medir_codigo(pasta: Path, caminhos: list[str],
     return medidos, situacoes
 
 
-# -------------------------------------------------------------
+# =============================================================
 # Medir Historico
 # -------------------------------------------------------------
+# Percorre o histórico e anota o último commit de cada arquivo
+# =============================================================
 def medir_historico(pasta: Path, caminhos: set[str],
                     avisar) -> tuple[dict, dict, float, int]:
     total = historico_rapido.contar_commits(pasta)
@@ -439,8 +416,6 @@ def medir_historico(pasta: Path, caminhos: set[str],
     ultimo = 0.0
     lidos = 0
 
-    # aplicar_commit e fotografar são os do extrator, sem cópia:
-    # é isso que garante a mesma conta do treino
     for commit in historico_rapido.percorrer_commits(pasta):
         metricas_historico.aplicar_commit(acumulado, commit)
         metricas_commit.registrar_ultimo_commit(ultimos, commit)
@@ -460,9 +435,12 @@ def medir_historico(pasta: Path, caminhos: set[str],
 # PREVISÃO
 # =============================================================
 
-# -------------------------------------------------------------
+
+# =============================================================
 # Montar Tabela
 # -------------------------------------------------------------
+# Junta código, histórico e commit numa tabela
+# =============================================================
 def montar_tabela(repositorio: str, medidos: dict, historicos: dict,
                   ultimos: dict) -> pd.DataFrame:
     linhas = []
@@ -475,20 +453,18 @@ def montar_tabela(repositorio: str, medidos: dict, historicos: dict,
 
     tabela = pd.DataFrame(linhas)
 
-    # Coluna ausente vira vazio, e vazio é preenchido com a média
-    # do treino logo adiante
     for coluna in features.COLUNAS_BASE + features.COLUNAS_COMMIT:
         if coluna not in tabela.columns:
             tabela[coluna] = np.nan
 
-    # Percentil dentro do repositório: aqui o repositório é este,
-    # e todos os arquivos medidos entram na conta
     return derivadas.acrescentar(tabela, features.COLUNAS_BASE)
 
 
-# -------------------------------------------------------------
+# =============================================================
 # Preparar Para o Modelo
 # -------------------------------------------------------------
+# Limpa a tabela com as médias do treino
+# =============================================================
 def preparar_para_o_modelo(tabela: pd.DataFrame,
                            pacote: dict) -> tuple[np.ndarray, str | None]:
     colunas = pacote["features"]
@@ -499,7 +475,6 @@ def preparar_para_o_modelo(tabela: pd.DataFrame,
     medias = pacote.get("medias")
 
     if medias is None:
-        # Modelo antigo, gravado antes das médias irem junto
         medias = {c: 0.0 for c in colunas}
         if matriz.isna().any().any():
             aviso = ("Modelo sem as médias do treino: valores faltantes "
@@ -508,17 +483,21 @@ def preparar_para_o_modelo(tabela: pd.DataFrame,
     return matriz.fillna(pd.Series(medias)).to_numpy(dtype=float), aviso
 
 
-# -------------------------------------------------------------
+# =============================================================
 # Percentis Exibidos
 # -------------------------------------------------------------
+# Calcula a posição de cada medida no repositório
+# =============================================================
 def percentis_exibidos(tabela: pd.DataFrame) -> pd.DataFrame:
     colunas = [c for c, _, _ in METRICAS_EXIBIDAS if c in tabela.columns]
     return tabela[colunas].rank(pct=True, method="average")
 
 
-# -------------------------------------------------------------
+# =============================================================
 # Valor Limpo
 # -------------------------------------------------------------
+# Converte um número para o formato do JSON
+# =============================================================
 def valor_limpo(valor):
     if valor is None or (isinstance(valor, float) and not np.isfinite(valor)):
         return None
@@ -527,17 +506,21 @@ def valor_limpo(valor):
     return round(float(valor), 3)
 
 
-# -------------------------------------------------------------
+# =============================================================
 # Dia do Instante
 # -------------------------------------------------------------
+# Converte um instante na data em formato ISO
+# =============================================================
 def dia_do_instante(instante: float) -> str:
     return (datetime.fromtimestamp(instante, tz=timezone.utc)
             .date().isoformat())
 
 
-# -------------------------------------------------------------
+# =============================================================
 # Descrever Commit
 # -------------------------------------------------------------
+# Os dados do commit que a tela mostra
+# =============================================================
 def descrever_commit(ultimo: dict) -> dict:
     return {
         "hash":        ultimo["hash"],
@@ -548,21 +531,13 @@ def descrever_commit(ultimo: dict) -> dict:
     }
 
 
-# -------------------------------------------------------------
+# =============================================================
 # Agrupar Commits
 # -------------------------------------------------------------
+# Os commits recentes, do mais para o menos arriscado
+# =============================================================
 def agrupar_commits(notas: dict[str, float], ultimos: dict,
                     referencia: float) -> dict:
-    """Os commits recentes, do mais para o menos arriscado.
-
-    Cada arquivo avaliado entra no seu último commit, e o risco do
-    commit é a maior nota entre eles, a mesma conta da Frente 1. Assim,
-    um commit só lista os arquivos que ninguém alterou depois dele.
-
-    Um commit antigo fica de fora porque o defeito que ele trouxe pode
-    já ter sido corrigido por outro commit que não tocou nos mesmos
-    arquivos, e aí o aviso não ajudaria quem vai revisar.
-    """
     limite = referencia - config.JANELA_REVISAO_DIAS * 86400.0
     grupos = {}
 
@@ -601,17 +576,10 @@ def agrupar_commits(notas: dict[str, float], ultimos: dict,
 # =============================================================
 def analisar(endereco: str, ramo: str | None = None,
              ao_progresso=None) -> dict:
-    """Devolve um dicionário pronto para virar JSON.
-
-    ao_progresso(etapa, fracao, mensagem) é chamado durante o
-    trabalho, com fracao de 0 a 1 sobre a análise inteira.
-    """
     inicio = time.time()
     repositorio, ramo_da_url = interpretar_endereco(endereco)
     ramo = ramo or ramo_da_url
 
-    # Pesos aproximados de cada etapa no tempo total, só para a
-    # barra de progresso andar de forma honesta
     faixas = {"clonando": (0.0, 0.25), "medindo": (0.25, 0.70),
               "historico": (0.70, 0.95), "prevendo": (0.95, 1.0)}
 
@@ -653,8 +621,6 @@ def analisar(endereco: str, ramo: str | None = None,
             pasta, set(medidos), etapa("historico"))
 
     finally:
-        # Sempre, inclusive com erro: um clone esquecido por análise
-        # enche o disco em poucos dias de uso
         apagar_pasta(pasta)
 
     etapa("prevendo")(0.0, "aplicando o modelo")

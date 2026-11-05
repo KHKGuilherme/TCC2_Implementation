@@ -1,5 +1,3 @@
-// frente3_web\web\components\Progresso.tsx
-
 /*
  * Tela de espera enquanto a análise roda: as quatro etapas, a
  * barra e a mensagem que a Frente 2 vai escrevendo.
@@ -14,6 +12,11 @@ const ETAPAS = [
   { chave: "prevendo", rotulo: "Aplicando o modelo" },
 ];
 
+// =============================================================
+// Progresso
+// -------------------------------------------------------------
+// Barra de andamento da análise
+// =============================================================
 export default function Progresso({ analise }: { analise: Analise }) {
   const atual = ETAPAS.findIndex((e) => e.chave === analise.etapa);
   const naFila = analise.status === "na_fila";

@@ -1,14 +1,6 @@
 """
 Mede os commits do dataset e grava uma tabela por repositório.
 
-As métricas de commit ficam fora de dados/dataset.csv de propósito:
-elas pertencem ao commit, e não ao arquivo, e acrescentá-las não pede
-refazer as 10 horas de medição de código. A junção com o dataset é
-feita em preparacao.juntar_commits.
-
-Cada repositório pronto vira config.PASTA_COMMITS/NOME.csv, e a rodada
-seguinte pula os que já existem. O clone é apagado no fim de cada um.
-
 CMD -> python frente1_treinamento/medir_commits.py
        python frente1_treinamento/medir_commits.py --repo NOME
 """
@@ -117,7 +109,6 @@ def main() -> None:
             raise SystemExit(f"Repositório fora do dataset: {argumentos.repo}")
         pedidos = pedidos[[argumentos.repo]]
 
-    # Do menor para o maior, para um reinício perder o mínimo
     pedidos = pedidos.loc[pedidos.map(len).sort_values().index]
 
     print(f"  {len(pedidos)} repositórios, colunas: "

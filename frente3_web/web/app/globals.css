@@ -1,9 +1,5 @@
-/* frente3_web\web\app\globals.css */
-
 /*
- * Estilo do DefectLens, seguindo o mockup da monografia: fundo
- * quase preto com grade sutil, verde como cor de destaque, e uma
- * escala verde → âmbar → vermelho para o risco.
+ * Estilo do DefectLens.
  */
 
 /* =============================================================
@@ -29,7 +25,6 @@
   --ambar: #f2c14e;
   --vermelho: #ff6b6b;
 
-  /* Escala de risco */
   --risco-baixo: #44dd86;
   --risco-medio: #f2c14e;
   --risco-alto: #ff6b6b;
@@ -60,7 +55,6 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  /* A grade de fundo do mockup */
   background-image:
     linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
@@ -1234,8 +1228,6 @@ code,
    TELAS ESTREITAS
    ============================================================= */
 @media (max-width: 900px) {
-  /* minmax(0, ...) e não 1fr: com 1fr a coluna cresce até caber o
-     nome mais longo da árvore e empurra a porcentagem para fora */
   .grade-analise {
     grid-template-columns: minmax(0, 1fr);
   }

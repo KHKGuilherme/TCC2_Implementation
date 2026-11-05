@@ -1,5 +1,3 @@
-// frente3_web\web\app\page.tsx
-
 "use client";
 
 /*
@@ -14,8 +12,6 @@ import FormularioAnalise from "@/components/FormularioAnalise";
 import { buscarModelo, buscarRecentes, type AnaliseResumo, type Modelo } from "@/lib/api";
 import { nivel, porcento } from "@/lib/arvore";
 
-// Nomes legíveis das features que mais pesam, para a seção
-// "como funciona". As que não estão aqui aparecem com o nome cru.
 const NOMES_DE_FEATURE: Record<string, string> = {
   fracao_autor_principal: "parcela do autor principal",
   revisoes_por_autor: "commits por autor",
@@ -42,6 +38,11 @@ const NOMES_DE_FEATURE: Record<string, string> = {
   churn: "linhas alteradas",
 };
 
+// =============================================================
+// Inicio
+// -------------------------------------------------------------
+// Página inicial com o formulário e os números do modelo
+// =============================================================
 export default function Inicio() {
   const [modelo, setModelo] = useState<Modelo | null>(null);
   const [erroModelo, setErroModelo] = useState("");
@@ -52,8 +53,6 @@ export default function Inicio() {
     buscarRecentes().then(setRecentes).catch(() => setRecentes([]));
   }, []);
 
-  // A análise recebe repositórios fora do treino, então o número
-  // principal é o de projeto nunca visto
   const auc = modelo?.projeto_novo?.auc ?? modelo?.metricas?.AUC;
   const rotuloAuc = modelo?.projeto_novo
     ? "AUC-ROC por commit em projeto nunca visto"
