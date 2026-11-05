@@ -3,14 +3,16 @@
 /*
  * Detalhe do arquivo selecionado na árvore.
  *
- * Mostra a probabilidade, a posição no ranking e as medidas mais
- * legíveis do arquivo, cada uma com o percentil dentro do próprio
+ * Mostra a nota da última alteração do arquivo, a posição no ranking
+ * e as medidas mais legíveis, cada uma com o percentil dentro do próprio
  * repositório: "mais complexo que 92% dos arquivos daqui" diz mais
  * do que "complexidade 34".
  */
 
 import type { ArquivoAnalisado, Resultado } from "@/lib/api";
 import { nivel, porcento, ROTULO_NIVEL } from "@/lib/arvore";
+
+import { formatarData } from "./CommitsRevisar";
 
 interface Props {
   arquivo: ArquivoAnalisado | null;
@@ -41,6 +43,7 @@ export default function PainelArquivo({ arquivo, resultado }: Props) {
   const avaliado = arquivo.situacao === "avaliado";
   const faixa = nivel(arquivo.probabilidade, limiar);
   const linkGithub = `https://github.com/${resultado.repositorio}/blob/${resultado.commit}/${arquivo.caminho}`;
+  const ultimo = arquivo.ultimo_commit;
 
   return (
     <aside className="cartao painel">
@@ -69,6 +72,22 @@ export default function PainelArquivo({ arquivo, resultado }: Props) {
             <span className="regua-limiar" style={{ left: `${100 * limiar}%` }} />
           </div>
           <p className="regua-legenda">limiar do modelo: {porcento(limiar, 0)}</p>
+
+          {ultimo && (
+            <p className="painel-commit">
+              Risco da última alteração:{" "}
+              <a
+                href={`https://github.com/${resultado.repositorio}/commit/${ultimo.hash}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <code>{ultimo.hash.slice(0, 10)}</code> ↗
+              </a>
+              , {formatarData(ultimo.data)}, {ultimo.arquivos.toLocaleString("pt-BR")}{" "}
+              {ultimo.arquivos === 1 ? "arquivo" : "arquivos"}, +{ultimo.adicionadas.toLocaleString("pt-BR")} −
+              {ultimo.removidas.toLocaleString("pt-BR")}. Não indica que o arquivo tem defeito hoje.
+            </p>
+          )}
 
           <table className="tabela-metricas">
             <thead>

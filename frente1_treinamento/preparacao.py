@@ -36,6 +36,33 @@ from extrator import derivadas, features
 # =============================================================
 
 # -------------------------------------------------------------
+# Juntar Commits
+# -------------------------------------------------------------
+def juntar_commits(dados: pd.DataFrame) -> pd.DataFrame:
+    # Para o programa quando falta um commit: preencher com a média
+    # faria um repositório inteiro parecer de tamanho médio
+    caminhos = sorted(config.PASTA_COMMITS.glob("*.csv"))
+
+    if not caminhos:
+        raise SystemExit(f"{config.PASTA_COMMITS} está vazia. Rode "
+                         f"python frente1_treinamento/medir_commits.py")
+
+    commits = pd.concat([pd.read_csv(c) for c in caminhos],
+                        ignore_index=True)
+    juntos = dados.merge(commits, on=["repositorio", "commit"], how="left",
+                         validate="many_to_one")
+    faltando = juntos[juntos[features.COLUNAS_COMMIT[0]].isna()]
+
+    if len(faltando):
+        nomes = sorted(faltando["repositorio"].unique())
+        raise SystemExit(f"{len(faltando)} retratos sem métricas de commit "
+                         f"em: {', '.join(nomes)}. Rode "
+                         f"python frente1_treinamento/medir_commits.py")
+
+    return juntos
+
+
+# -------------------------------------------------------------
 # Marcar Invalidos
 # -------------------------------------------------------------
 def marcar_invalidos(dados: pd.DataFrame) -> pd.DataFrame:
@@ -407,6 +434,7 @@ def main() -> None:
 
     dados = pd.read_csv(config.ARQUIVO_DATASET)
     features.conferir_contrato(dados.columns)
+    dados = juntar_commits(dados)
 
     # As mesmas derivadas que o treino usa, para o diagnóstico
     # falar das features que o modelo realmente recebe
@@ -419,7 +447,8 @@ def main() -> None:
     print(f"  {len(dados)} linhas, "
           f"{dados['repositorio'].nunique()} repositórios")
     print(f"  {len(features.COLUNAS_BASE)} medidas + "
-          f"{len(features.FEATURES) - len(features.COLUNAS_BASE)} derivadas")
+          f"{len(derivadas.colunas_ativas(features.COLUNAS_BASE))} derivadas + "
+          f"{len(features.COLUNAS_COMMIT)} de commit")
     print(f"  derivadas: {derivadas.descrever(features.COLUNAS_BASE)}")
 
     mostrar_diagnostico(diagnosticar(dados))

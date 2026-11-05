@@ -19,6 +19,10 @@ ARQUIVO_DATASET = PASTA_DADOS / "dataset.csv"
 # Progresso salvo da montagem. Uma subpasta por configuração.
 PASTA_PARCIAIS = PASTA_DADOS / "parciais"
 
+# Tamanho e dispersão dos commits do dataset, um CSV por repositório.
+# Ficam fora do dataset porque pertencem ao commit, e não ao arquivo.
+PASTA_COMMITS = PASTA_DADOS / "commits"
+
 # O modelo treinado
 ARQUIVO_MODELO = PASTA_MODELOS / "modelo.joblib"
 
@@ -29,6 +33,14 @@ ARQUIVO_PREVISOES = PASTA_DADOS / "previsoes.csv"
 # O mesmo, agregado por arquivo: é esta a saída que responde
 # "quanto este arquivo é arriscado"
 ARQUIVO_RISCO = PASTA_DADOS / "risco_por_arquivo.csv"
+
+# Validação em projeto nunca visto: um CSV por repositório deixado
+# de fora, e o quadro final com as métricas de cada um
+PASTA_VALIDACAO_REPOS = PASTA_DADOS / "validacao_repos"
+ARQUIVO_VALIDACAO_REPOS = PASTA_DADOS / "resultado_por_repositorio.csv"
+
+# Resumo da mesma validação, lido pela Frente 3
+ARQUIVO_RESUMO_PROJETO_NOVO = PASTA_DADOS / "resumo_projeto_novo.json"
 
 # Saídas do pré-processamento
 ARQUIVO_CORRELACAO = PASTA_DADOS / "correlacao_spearman.csv"
@@ -260,6 +272,19 @@ ESTRATEGIA_VALIDACAO = "group_kfold"
 # Dobras de "group_kfold" e "stratified_kfold"
 DOBRAS_VALIDACAO = 5
 
+# O algoritmo do modelo final, usado por treinar.py --so-final e por
+# validar_repositorios.py. Sai da comparação do treino completo, e o
+# número exibido no site tem de ser o deste mesmo modelo.
+MODELO_FINAL = "Gradient Boosting"
+
+# Repositórios treinados ao mesmo tempo em validar_repositorios.py. O
+# Gradient Boosting usa um núcleo só, e cada treino leva cerca de 4 min.
+PROCESSOS_VALIDACAO_REPOS = 12
+
+# Abaixo disso o repositório fica fora da mediana: com poucos
+# arquivos, o AUC dele é quase sorteio
+MINIMO_ARQUIVOS_REPO = 30
+
 
 # =============================================================
 # PARÂMETROS DA MONTAGEM
@@ -345,6 +370,16 @@ MEDIR_PROPRIEDADE = True
 
 # Tamanho da janela de "atividade recente", em dias
 JANELA_RECENTE_DIAS = 90
+
+# Quantos dias antes do último commit do repositório a Frente 2 ainda
+# chama um commit de recente. Conta a partir do repositório, e não de
+# hoje: o mesmo commit analisado dá sempre o mesmo resultado, e um
+# projeto parado não fica com a lista vazia.
+JANELA_REVISAO_DIAS = 90
+
+# Quantos commits a Frente 2 devolve para revisão, do mais arriscado
+# para o menos arriscado
+COMMITS_PARA_REVISAR = 20
 
 # Abaixo desta fração das mudanças, o autor conta como ocasional
 FRACAO_AUTOR_MENOR = 0.05
@@ -445,6 +480,16 @@ ESTRATEGIA_BALANCEAMENTO = "replicar"
 # PARÂMETROS DO TREINO
 # =============================================================
 
+# Partições do Defectors cujo rótulo é confiável. Os commits de
+# 'test' e 'val' são os mais recentes de cada projeto: têm 13% de
+# defeito contra 48% de 'train', provavelmente porque muitos
+# defeitos deles ainda não tinham sido consertados. Ficam fora do
+# treino e da avaliação; a divisão por arquivo não muda.
+#
+# Tupla vazia usa todos. Em projeto novo, tirá-los leva o AUC de
+# 0,623 para 0,642, medido só nos retratos de 'train'.
+PARTICOES_MADURAS = ("train",)
+
 # Probabilidade a partir da qual o arquivo é marcado como defeituoso
 LIMIAR_DECISAO = 0.5
 
@@ -490,23 +535,15 @@ REPETICOES_PERMUTACAO = 5
 # O arquivo completo é gravado em ARQUIVO_RISCO de qualquer jeito.
 TOPO_RANKING = 20
 
-# Peso da média geral na nota de cada arquivo.
-#
-# Um arquivo entra no dataset uma vez por commit que o alterou, e
-# a nota dele é a média dessas probabilidades. Sem correção, o
-# topo do ranking enche de arquivos com UM retrato só: a média de
-# uma amostra varia muito mais que a de sete, então os extremos
-# são ocupados por quem tem menos evidência.
-#
-# Este k equivale a "quantos retratos de credibilidade a média
-# geral vale". Com 5, um arquivo de 1 retrato fica perto da média
-# geral e um de 20 quase não se move.
-PESO_DA_PRIOR = 5
-
 # Tamanhos de topo avaliados. Para uma ferramenta que ORDENA
 # arquivos, a precisão nos N primeiros é mais honesta que F1 num
 # limiar fixo: é o que o desenvolvedor vive se olhar só os N.
 TOPOS_AVALIADOS = (10, 50, 100, 500)
+
+# Frações de cada repositório avaliadas. O topo geral mistura
+# projetos; estas medem o que a Frente 2 entrega, que é a ordem
+# dentro de um projeto só.
+FRACOES_POR_REPOSITORIO = (0.1, 0.2)
 
 
 # =============================================================

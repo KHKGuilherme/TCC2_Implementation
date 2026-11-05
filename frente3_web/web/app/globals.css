@@ -1086,6 +1086,102 @@ code,
 /* -------------------------------------------------------------
    Ranking
    ------------------------------------------------------------- */
+/* Commits para revisar */
+.revisao {
+  margin-bottom: 20px;
+}
+
+.revisao-explicacao {
+  margin: 0 0 14px;
+  max-width: 78ch;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--texto-2);
+}
+
+.revisao-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.revisao-commit {
+  display: flex;
+  gap: 16px;
+  padding: 12px 0;
+  border-top: 1px solid var(--borda);
+}
+
+.revisao-risco {
+  flex: 0 0 48px;
+  font-family: var(--fonte-mono), monospace;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.revisao-corpo {
+  flex: 1;
+  min-width: 0;
+}
+
+.revisao-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: var(--texto-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.revisao-meta a {
+  color: var(--azul);
+}
+
+.revisao-arquivos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.revisao-arquivos button {
+  max-width: 100%;
+  overflow: hidden;
+  padding: 2px 8px;
+  border: 1px solid var(--borda);
+  border-radius: var(--raio-pequeno);
+  background: var(--superficie-2);
+  color: var(--texto-2);
+  font-family: var(--fonte-mono), monospace;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.revisao-arquivos button:hover,
+.revisao-arquivos .revisao-ativo {
+  border-color: var(--borda-forte);
+  color: var(--texto);
+}
+
+.revisao-extras {
+  font-size: 12px;
+  color: var(--texto-3);
+}
+
+.painel-commit {
+  margin: 12px 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--texto-2);
+}
+
+.painel-commit a {
+  color: var(--azul);
+}
+
 .titulo-cartao {
   margin: 0 0 10px;
   font-size: 14px;

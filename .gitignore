@@ -28,3 +28,12 @@ frente3_web/web/.next/
 frente3_web/web/next-env.d.ts
 *.tsbuildinfo
 frente3_web/backend/db.sqlite3
+
+# Instruções locais do Claude Code
+CLAUDE.md
+
+# Previsões da validação por repositório: refazíveis
+dados/validacao_repos/
+
+# Notas pessoais: metodologia e instruções do projeto
+nota pessoal/

@@ -15,6 +15,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import Arvore from "@/components/Arvore";
+import CommitsRevisar from "@/components/CommitsRevisar";
 import FormularioAnalise from "@/components/FormularioAnalise";
 import PainelArquivo from "@/components/PainelArquivo";
 import Progresso from "@/components/Progresso";
@@ -193,13 +194,15 @@ function Resultados({ resultado }: { resultado: Resultado }) {
         </div>
         <div className="cartao-numero">
           <strong className={`cor-${nivel(resumo.risco_maximo, limiar)}`}>{porcento(resumo.risco_maximo)}</strong>
-          <span>maior probabilidade</span>
+          <span>maior nota de risco</span>
         </div>
         <div className="cartao-numero">
           <strong className={`cor-${nivel(resumo.risco_medio, limiar)}`}>{porcento(resumo.risco_medio)}</strong>
           <span>média dos avaliados</span>
         </div>
       </section>
+
+      <CommitsRevisar resultado={resultado} selecionado={selecionado} selecionar={irPara} />
 
       <div className="grade-analise">
         <section className="cartao coluna-arvore">
@@ -229,7 +232,10 @@ function Resultados({ resultado }: { resultado: Resultado }) {
             <span className="legenda-item"><i className="fundo-alto" /> alto (≥ {porcento(limiar, 0)})</span>
             <span className="legenda-item"><i className="fundo-medio" /> médio</span>
             <span className="legenda-item"><i className="fundo-baixo" /> baixo</span>
-            <span className="legenda-nota">Pastas mostram o maior risco entre os arquivos dentro delas.</span>
+            <span className="legenda-nota">
+              O risco de um arquivo é o do último commit que o alterou. Pastas mostram o maior risco entre os arquivos
+              dentro delas.
+            </span>
           </p>
 
           {arvore.filhos.length === 0 ? (
@@ -251,7 +257,7 @@ function Resultados({ resultado }: { resultado: Resultado }) {
           <PainelArquivo arquivo={arquivoSelecionado} resultado={resultado} />
 
           <section className="cartao">
-            <h2 className="titulo-cartao">Mais arriscados</h2>
+            <h2 className="titulo-cartao">Arquivos com a última mudança mais arriscada</h2>
             <ol className="ranking">
               {ranking.slice(0, 10).map((a) => (
                 <li key={a.caminho}>

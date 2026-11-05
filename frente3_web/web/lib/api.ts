@@ -24,11 +24,33 @@ export type Situacao =
 // [valor, percentil dentro do repositório]
 export type ValorComPercentil = [number | null, number | null];
 
+export interface CommitResumo {
+  hash: string;
+  data: string;
+  arquivos: number;
+  adicionadas: number;
+  removidas: number;
+}
+
+export interface CommitParaRevisar extends CommitResumo {
+  risco: number;
+  avaliados: string[];
+}
+
+export interface Revisao {
+  janela_dias: number;
+  referencia: string;
+  recentes: number;
+  fora_da_janela: number;
+  commits: CommitParaRevisar[];
+}
+
 export interface ArquivoAnalisado {
   caminho: string;
   situacao: Situacao;
   probabilidade?: number;
   posicao?: number;
+  ultimo_commit?: CommitResumo | null;
   metricas?: Record<string, ValorComPercentil>;
 }
 
@@ -54,6 +76,7 @@ export interface Resultado {
   };
   metricas_exibidas: MetricaExibida[];
   situacoes: Record<Situacao, string>;
+  revisao?: Revisao;
   arquivos: ArquivoAnalisado[];
   aviso: string | null;
   duracao_s: number;
@@ -93,6 +116,15 @@ export interface Modelo {
   features: number;
   limiar: number;
   metricas: Record<string, number> | null;
+  projeto_novo: {
+    repositorios: number;
+    auc: number;
+    auc_mediano: number;
+    auc_retrato: number;
+    base: number;
+    precisao_topo: number;
+    fracao_topo: number;
+  } | null;
   treinado_em: string | null;
   repositorios_treino: number | null;
   tem_medias: boolean;

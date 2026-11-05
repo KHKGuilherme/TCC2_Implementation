@@ -15,13 +15,15 @@ from extrator import features
 
 
 # =============================================================
-# Chave de Arquivo
+# Chave de Commit
 # -------------------------------------------------------------
-# Identificador único de um arquivo
+# Identificador único de um commit
 # =============================================================
-def chave_de_arquivo(dados: pd.DataFrame) -> np.ndarray:
-    # Junta o repositório porque quase todo projeto tem um utils.py
-    return (dados["repositorio"] + "::" + dados["arquivo"]).to_numpy()
+def chave_de_commit(dados: pd.DataFrame) -> np.ndarray:
+    # O rótulo e as métricas de commit são iguais em todos os arquivos
+    # do commit. Separar esses arquivos entre treino e teste entregaria
+    # a resposta ao modelo, porque o tamanho do commit o identifica.
+    return (dados["repositorio"] + "::" + dados["commit"]).to_numpy()
 
 
 # =============================================================
@@ -89,15 +91,15 @@ def dividir_train_test_split(dados: pd.DataFrame) -> pd.Series:
 # Dividir Group Shuffle Split ( GroupShuffleSplit )
 # -------------------------------------------------------------
 def dividir_group_shuffle_split(dados: pd.DataFrame) -> pd.Series:
-    # Sorteia ARQUIVOS em vez de linhas. Todos os retratos de um
-    # arquivo vão para o mesmo lado, mas projetos continuam
-    # misturados.
+    # Sorteia COMMITS em vez de linhas. Todos os arquivos de um commit
+    # vão para o mesmo lado. O mesmo arquivo pode aparecer nos dois
+    # lados, em commits diferentes, e projetos continuam misturados.
     divisor = GroupShuffleSplit(n_splits=1,
                                 test_size=config.FRACAO_TESTE,
                                 random_state=config.SEMENTE)
 
     posicoes_treino, posicoes_teste = next(
-        divisor.split(dados, groups=chave_de_arquivo(dados)))
+        divisor.split(dados, groups=chave_de_commit(dados)))
 
     particao = pd.Series("treino", index=dados.index)
     particao.iloc[posicoes_teste] = "teste"
@@ -136,13 +138,13 @@ def validar_leave_one_group_out(treino: pd.DataFrame):
 # Validar Group KFold ( GroupKFold )
 # -------------------------------------------------------------
 def validar_group_kfold(treino: pd.DataFrame):
-    # Nenhum arquivo aparece em duas dobras. Projetos continuam
+    # Nenhum commit aparece em duas dobras. Projetos continuam
     # misturados entre elas.
-    grupos = chave_de_arquivo(treino)
+    grupos = chave_de_commit(treino)
     dobras = min(config.DOBRAS_VALIDACAO, len(np.unique(grupos)))
 
     return (grupos, GroupKFold(n_splits=dobras),
-            f"GroupKFold por arquivo — {dobras} dobras")
+            f"GroupKFold por commit — {dobras} dobras")
 
 
 # -------------------------------------------------------------
@@ -227,7 +229,7 @@ def descrever_divisao() -> str:
     if nome == "train_test_split":
         return f"train_test_split estratificado — {fracao} das linhas"
     if nome == "group_shuffle_split":
-        return f"GroupShuffleSplit por arquivo — {fracao} dos arquivos"
+        return f"GroupShuffleSplit por commit — {fracao} dos commits"
     return "sem reserva — todas as linhas são de treino"
 
 

@@ -32,6 +32,12 @@ const NOMES_DE_FEATURE: Record<string, string> = {
   fracao_maior_funcao: "peso da maior função",
   densidade_comentarios: "densidade de comentários",
   revisoes: "commits que alteraram",
+  commit_arquivos: "arquivos no commit",
+  commit_pastas: "pastas no commit",
+  commit_topos: "áreas do projeto no commit",
+  commit_adicionadas: "linhas adicionadas no commit",
+  commit_removidas: "linhas removidas no commit",
+  commit_entropia: "dispersão da mudança no commit",
   autores: "autores",
   churn: "linhas alteradas",
 };
@@ -46,7 +52,12 @@ export default function Inicio() {
     buscarRecentes().then(setRecentes).catch(() => setRecentes([]));
   }, []);
 
-  const auc = modelo?.metricas?.AUC;
+  // A análise recebe repositórios fora do treino, então o número
+  // principal é o de projeto nunca visto
+  const auc = modelo?.projeto_novo?.auc ?? modelo?.metricas?.AUC;
+  const rotuloAuc = modelo?.projeto_novo
+    ? "AUC-ROC por commit em projeto nunca visto"
+    : "AUC-ROC no conjunto reservado";
   const limiar = modelo?.limiar ?? 0.5;
 
   return (
@@ -68,8 +79,8 @@ export default function Inicio() {
         </h1>
 
         <p className="subtitulo">
-          Informe um repositório do GitHub e veja, arquivo por arquivo, a probabilidade de existir um defeito,
-          estimada a partir da complexidade do código, de avisos de estilo e do histórico de commits.
+          Informe um repositório do GitHub e veja quais commits recentes merecem revisão primeiro, pelo risco de terem
+          introduzido um defeito, estimado a partir do tamanho do commit, do código e do histórico de cada arquivo.
         </p>
 
         <FormularioAnalise />
@@ -112,7 +123,7 @@ export default function Inicio() {
         </div>
         <div className="cartao-numero">
           <strong className="cor-roxo">{auc ? auc.toFixed(2) : "—"}</strong>
-          <span>AUC-ROC no conjunto reservado</span>
+          <span>{rotuloAuc}</span>
         </div>
       </section>
 
@@ -126,15 +137,18 @@ export default function Inicio() {
           <li>
             <strong>Mede cada arquivo .py</strong>
             <span>
-              com as mesmas ferramentas do treino: Radon, Lizard, AST, Ruff e o histórico Git
+              com as mesmas ferramentas do treino: Radon, Lizard, AST, Ruff e o histórico Git, mais o último commit
+              que alterou o arquivo
               {modelo ? ` — ${modelo.features} features` : ""}.
             </span>
           </li>
           <li>
-            <strong>Aplica o modelo</strong>
+            <strong>Ordena os commits</strong>
             <span>
-              treinado no Defectors{modelo?.repositorios_treino ? ` (${modelo.repositorios_treino} projetos)` : ""}.
-              Cada pasta mostra o maior risco entre os arquivos dentro dela.
+              com o modelo treinado no Defectors
+              {modelo?.repositorios_treino ? ` (${modelo.repositorios_treino} projetos)` : ""}. A nota é uma ordem de
+              prioridade para revisão: não diz que o arquivo tem defeito hoje, nem qual arquivo do commit causou o
+              problema.
             </span>
           </li>
         </ol>

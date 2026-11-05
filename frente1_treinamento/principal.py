@@ -12,6 +12,7 @@ sys.path.insert(0, str(AQUI.parent))
 sys.path.insert(0, str(AQUI))
 
 import config
+import medir_commits
 import montar_dataset
 import treinar as treinamento
 from extrator import features
@@ -97,6 +98,9 @@ def main() -> None:
     print()
 
     preparar_dataset()
+
+    print()
+    medir_commits.main()
 
     print()
     treinamento.treinar()

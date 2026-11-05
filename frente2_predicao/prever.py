@@ -1,22 +1,27 @@
 # frente2_predicao\prever.py
 """
-Frente 2 — avalia um repositório inédito, arquivo por arquivo.
+Frente 2 — estima o risco de o último commit de cada arquivo ter
+introduzido um defeito, num repositório inédito.
 
   endereço -> clone -> mede cada .py -> lê o histórico -> derivadas
-           -> mesmo pré-processamento do treino -> modelo -> probabilidade
+           -> mesmo pré-processamento do treino -> modelo -> risco
+           -> commits recentes para revisar
 
 Usa o MESMO extrator da Frente 1 para tudo que vira feature. A única
 peça própria daqui é a leitura do histórico (historico_rapido.py),
 que entrega ao extrator os mesmos dados que o PyDriller entregaria,
 só que de uma vez.
 
-Cada arquivo é fotografado no último commit do repositório: é o
-estado que o usuário tem hoje nas mãos.
+Cada arquivo é medido como está no último commit do repositório, com
+as métricas do último commit que o alterou. A nota é uma ordem de
+prioridade: ela não foi calibrada, e o rótulo é uma marca automática,
+então 70% não quer dizer 70% de chance real.
 
 CMD -> python frente2_predicao/prever.py psf/black
        mostra os arquivos mais arriscados no terminal
 """
 
+import json
 import os
 import re
 import shutil
@@ -26,6 +31,7 @@ import sys
 import time
 import uuid
 import warnings
+from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 
@@ -37,7 +43,8 @@ RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RAIZ))
 
 import config
-from extrator import derivadas, features, metricas_codigo, metricas_historico
+from extrator import (derivadas, features, metricas_codigo, metricas_commit,
+                      metricas_historico)
 from frente2_predicao import historico_rapido
 
 
@@ -160,6 +167,20 @@ def importancias(pacote: dict, quantas: int = 10) -> list[dict]:
 
 
 # -------------------------------------------------------------
+# Ler Resumo de Projeto Novo
+# -------------------------------------------------------------
+def ler_resumo_projeto_novo() -> dict | None:
+    # Sai de validar_repositorios.py. É a medida que corresponde ao
+    # uso da Frente 2, que só recebe repositórios fora do treino.
+    caminho = RAIZ / config.ARQUIVO_RESUMO_PROJETO_NOVO
+
+    if not caminho.exists():
+        return None
+
+    return json.loads(caminho.read_text(encoding="utf-8"))
+
+
+# -------------------------------------------------------------
 # Descrever Modelo
 # -------------------------------------------------------------
 def descrever_modelo() -> dict:
@@ -170,6 +191,7 @@ def descrever_modelo() -> dict:
         "features":    len(pacote["features"]),
         "limiar":      pacote["limiar"],
         "metricas":    pacote.get("metricas"),
+        "projeto_novo": ler_resumo_projeto_novo(),
         "treinado_em": pacote.get("treinado_em"),
         "repositorios_treino": pacote.get("repositorios_treino"),
         # Modelo gravado antes das médias irem para o joblib
@@ -410,9 +432,10 @@ def medir_codigo(pasta: Path, caminhos: list[str],
 # Medir Historico
 # -------------------------------------------------------------
 def medir_historico(pasta: Path, caminhos: set[str],
-                    avisar) -> tuple[dict, int]:
+                    avisar) -> tuple[dict, dict, float, int]:
     total = historico_rapido.contar_commits(pasta)
     acumulado = {}
+    ultimos = {}
     ultimo = 0.0
     lidos = 0
 
@@ -420,6 +443,7 @@ def medir_historico(pasta: Path, caminhos: set[str],
     # é isso que garante a mesma conta do treino
     for commit in historico_rapido.percorrer_commits(pasta):
         metricas_historico.aplicar_commit(acumulado, commit)
+        metricas_commit.registrar_ultimo_commit(ultimos, commit)
         ultimo = commit.committer_date.timestamp()
         lidos += 1
 
@@ -428,7 +452,8 @@ def medir_historico(pasta: Path, caminhos: set[str],
 
     avisar(1.0, f"{total} de {total} commits")
 
-    return metricas_historico.fotografar(acumulado, caminhos, ultimo), total
+    historicos = metricas_historico.fotografar(acumulado, caminhos, ultimo)
+    return historicos, ultimos, ultimo, total
 
 
 # =============================================================
@@ -438,18 +463,21 @@ def medir_historico(pasta: Path, caminhos: set[str],
 # -------------------------------------------------------------
 # Montar Tabela
 # -------------------------------------------------------------
-def montar_tabela(repositorio: str, medidos: dict,
-                  historicos: dict) -> pd.DataFrame:
+def montar_tabela(repositorio: str, medidos: dict, historicos: dict,
+                  ultimos: dict) -> pd.DataFrame:
     linhas = []
     for caminho, medidas in medidos.items():
+        ultimo = ultimos.get(caminho, {})
         linhas.append({"repositorio": repositorio, "arquivo": caminho,
-                       **medidas, **historicos.get(caminho, {})})
+                       **medidas, **historicos.get(caminho, {}),
+                       **{c: ultimo[c] for c in features.COLUNAS_COMMIT
+                          if c in ultimo}})
 
     tabela = pd.DataFrame(linhas)
 
     # Coluna ausente vira vazio, e vazio é preenchido com a média
     # do treino logo adiante
-    for coluna in features.COLUNAS_BASE:
+    for coluna in features.COLUNAS_BASE + features.COLUNAS_COMMIT:
         if coluna not in tabela.columns:
             tabela[coluna] = np.nan
 
@@ -499,10 +527,77 @@ def valor_limpo(valor):
     return round(float(valor), 3)
 
 
+# -------------------------------------------------------------
+# Dia do Instante
+# -------------------------------------------------------------
+def dia_do_instante(instante: float) -> str:
+    return (datetime.fromtimestamp(instante, tz=timezone.utc)
+            .date().isoformat())
+
+
+# -------------------------------------------------------------
+# Descrever Commit
+# -------------------------------------------------------------
+def descrever_commit(ultimo: dict) -> dict:
+    return {
+        "hash":        ultimo["hash"],
+        "data":        dia_do_instante(ultimo["instante"]),
+        "arquivos":    ultimo["commit_arquivos"],
+        "adicionadas": ultimo["commit_adicionadas"],
+        "removidas":   ultimo["commit_removidas"],
+    }
+
+
+# -------------------------------------------------------------
+# Agrupar Commits
+# -------------------------------------------------------------
+def agrupar_commits(notas: dict[str, float], ultimos: dict,
+                    referencia: float) -> dict:
+    """Os commits recentes, do mais para o menos arriscado.
+
+    Cada arquivo avaliado entra no seu último commit, e o risco do
+    commit é a maior nota entre eles, a mesma conta da Frente 1. Assim,
+    um commit só lista os arquivos que ninguém alterou depois dele.
+
+    Um commit antigo fica de fora porque o defeito que ele trouxe pode
+    já ter sido corrigido por outro commit que não tocou nos mesmos
+    arquivos, e aí o aviso não ajudaria quem vai revisar.
+    """
+    limite = referencia - config.JANELA_REVISAO_DIAS * 86400.0
+    grupos = {}
+
+    for caminho, nota in notas.items():
+        ultimo = ultimos.get(caminho)
+        if ultimo is None:
+            continue
+
+        grupo = grupos.setdefault(ultimo["hash"], {
+            **descrever_commit(ultimo),
+            "recente": ultimo["instante"] >= limite,
+            "risco": 0.0, "avaliados": [],
+        })
+        grupo["risco"] = max(grupo["risco"], round(nota, 4))
+        grupo["avaliados"].append(caminho)
+
+    recentes = [g for g in grupos.values() if g.pop("recente")]
+    recentes.sort(key=lambda g: (-g["risco"], g["hash"]))
+
+    for grupo in recentes:
+        grupo["avaliados"].sort(key=lambda c: (-notas[c], c))
+
+    return {
+        "janela_dias":   config.JANELA_REVISAO_DIAS,
+        "referencia":    dia_do_instante(referencia),
+        "recentes":      len(recentes),
+        "fora_da_janela": len(grupos) - len(recentes),
+        "commits":       recentes[:config.COMMITS_PARA_REVISAR],
+    }
+
+
 # =============================================================
 # Analisar
 # -------------------------------------------------------------
-# A Frente 2 inteira: endereço entra, nota por arquivo sai
+# A Frente 2 inteira: endereço entra, commits para revisar saem
 # =============================================================
 def analisar(endereco: str, ramo: str | None = None,
              ao_progresso=None) -> dict:
@@ -554,7 +649,7 @@ def analisar(endereco: str, ramo: str | None = None,
                 "Nenhum arquivo pôde ser avaliado: todos são testes, "
                 "estão fora do escopo ou não têm funções.")
 
-        historicos, total_commits = medir_historico(
+        historicos, ultimos, referencia, total_commits = medir_historico(
             pasta, set(medidos), etapa("historico"))
 
     finally:
@@ -563,7 +658,7 @@ def analisar(endereco: str, ramo: str | None = None,
         apagar_pasta(pasta)
 
     etapa("prevendo")(0.0, "aplicando o modelo")
-    tabela = montar_tabela(repositorio, medidos, historicos)
+    tabela = montar_tabela(repositorio, medidos, historicos, ultimos)
     matriz, aviso = preparar_para_o_modelo(tabela, pacote)
     tabela["probabilidade"] = pacote["modelo"].predict_proba(matriz)[:, 1]
     tabela["posicao"] = tabela["probabilidade"].rank(
@@ -577,6 +672,8 @@ def analisar(endereco: str, ramo: str | None = None,
         por_caminho[linha["arquivo"]] = {
             "probabilidade": round(float(linha["probabilidade"]), 4),
             "posicao": int(linha["posicao"]),
+            "ultimo_commit": (descrever_commit(ultimos[linha["arquivo"]])
+                              if linha["arquivo"] in ultimos else None),
             "metricas": {c: [valor_limpo(linha[c]),
                              valor_limpo(percentis.at[indice, c])]
                          for c in exibidas},
@@ -610,6 +707,9 @@ def analisar(endereco: str, ramo: str | None = None,
             {"coluna": c, "rotulo": r, "melhor": m}
             for c, r, m in METRICAS_EXIBIDAS if c in exibidas],
         "situacoes": SITUACOES,
+        "revisao":   agrupar_commits(
+            dict(zip(tabela["arquivo"], tabela["probabilidade"])),
+            ultimos, referencia),
         "arquivos":  arquivos,
         "aviso":     aviso,
         "duracao_s": round(time.time() - inicio, 1),
@@ -630,6 +730,15 @@ def mostrar(resultado: dict, quantos: int = 20) -> None:
           f"{resultado['duracao_s']} s")
     if resultado["aviso"]:
         print(f"  AVISO: {resultado['aviso']}")
+
+    revisao = resultado["revisao"]
+    print(f"\n  Commits para revisar: {revisao['recentes']} nos "
+          f"{revisao['janela_dias']} dias até {revisao['referencia']}, "
+          f"{revisao['fora_da_janela']} mais antigos fora da lista")
+    for commit in revisao["commits"][:quantos]:
+        print(f"    {100 * commit['risco']:>5.1f}%  {commit['hash'][:10]}  "
+              f"{commit['data']}  {commit['arquivos']} arquivos, "
+              f"+{commit['adicionadas']} -{commit['removidas']}")
 
     avaliados = sorted((a for a in resultado["arquivos"]
                         if a["situacao"] == "avaliado"),

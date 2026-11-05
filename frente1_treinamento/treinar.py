@@ -1,7 +1,14 @@
 """
 Treina o modelo a partir de dados/dataset.csv e grava o resultado em modelos/modelo.joblib.
+
+CMD -> python frente1_treinamento/treinar.py
+       python frente1_treinamento/treinar.py --so-ranking
+              refaz o ranking por arquivo a partir de dados/previsoes.csv
+       python frente1_treinamento/treinar.py --so-final
+              pula as comparações e treina só o config.MODELO_FINAL
 """
 
+import os
 import sys
 import time
 from pathlib import Path
@@ -27,6 +34,10 @@ import divisao
 import graficos
 import preparacao
 from extrator import derivadas, features
+
+# Colunas que dizem qual retrato de um arquivo veio depois, nesta
+# ordem. Saem do dataset porque previsoes.csv não guarda data.
+COLUNAS_DE_ORDEM = ("idade_dias", "revisoes")
 
 
 # =============================================================
@@ -123,6 +134,20 @@ def mostrar_tabela(titulo: str, resultados: dict) -> None:
 
 
 # =============================================================
+# So Maduros
+# -------------------------------------------------------------
+# Tira os retratos recentes, cujo rótulo não é confiável
+# =============================================================
+def so_maduros(dados: pd.DataFrame) -> pd.DataFrame:
+    if not config.PARTICOES_MADURAS:
+        return dados
+
+    maduros = dados[features.COLUNA_PARTICAO_DEFECTORS].astype(str).isin(
+        config.PARTICOES_MADURAS)
+    return dados[maduros]
+
+
+# =============================================================
 # Carregar Dados
 # -------------------------------------------------------------
 # lê o dataset e aplica a divisão atual
@@ -131,6 +156,7 @@ def carregar_dados() -> tuple[pd.DataFrame, pd.DataFrame]:
 
     dados = pd.read_csv(config.ARQUIVO_DATASET)
     features.conferir_contrato(dados.columns)
+    dados = preparacao.juntar_commits(dados)
 
     # ANTES da divisão, de propósito: o percentil é calculado
     # dentro de cada repositório e precisa de todos os arquivos
@@ -147,7 +173,7 @@ def carregar_dados() -> tuple[pd.DataFrame, pd.DataFrame]:
 
     dados[features.COLUNA_PARTICAO] = atual
 
-    treino = dados[dados[features.COLUNA_PARTICAO] == "treino"]
+    treino = so_maduros(dados[dados[features.COLUNA_PARTICAO] == "treino"])
     teste = dados[dados[features.COLUNA_PARTICAO] == "teste"]
 
     # O pré-processamento vem DEPOIS da divisão, e não antes: a
@@ -207,6 +233,7 @@ def comparar_grupos_de_features(treino: pd.DataFrame, nome_modelo: str,
         "só 'revisoes'":    ["revisoes"],
         "só código (6)":    features.COLUNAS_CODIGO,
         "só histórico (3)": features.COLUNAS_HISTORICO,
+        f"só commit ({len(features.COLUNAS_COMMIT)})": features.COLUNAS_COMMIT,
         f"medidas ({len(base)})": base,
     }
 
@@ -300,60 +327,122 @@ def gravar_previsoes(teste: pd.DataFrame, probabilidade) -> pd.DataFrame:
 
 
 # =============================================================
+# Acrescentar Ordem
+# -------------------------------------------------------------
+# Traz do dataset as colunas que ordenam os retratos no tempo
+# =============================================================
+def acrescentar_ordem(previsoes: pd.DataFrame) -> pd.DataFrame:
+    chave = ["repositorio", "arquivo", "commit"]
+    ordem = pd.read_csv(config.ARQUIVO_DATASET,
+                        usecols=chave + list(COLUNAS_DE_ORDEM))
+
+    # validate para o programa parar se a chave repetir: uma linha
+    # duplicada aqui mudaria em silêncio qual retrato é o mais recente
+    return previsoes.merge(ordem, on=chave, how="left",
+                           validate="one_to_one")
+
+
+# =============================================================
 # Risco por Arquivo
 # -------------------------------------------------------------
-# Junta os retratos de um arquivo numa nota só
+# Uma linha por arquivo, pelo seu retrato mais recente
 # =============================================================
 def risco_por_arquivo(previsoes: pd.DataFrame) -> pd.DataFrame:
     # Cada arquivo entra no dataset uma vez por commit em que foi
-    # alterado, então o mesmo caminho tem vários retratos com
-    # probabilidades diferentes. Esta é a tabela que responde
-    # "quanto este arquivo é arriscado", uma linha por arquivo.
+    # alterado, então o mesmo caminho tem vários retratos. A nota e
+    # o rótulo vêm do mais recente, o mesmo retrato que a Frente 2
+    # avalia ao fotografar o arquivo no último commit.
     #
-    # A média é a nota principal porque usa todos os retratos. A
-    # máxima acompanha porque um arquivo que já foi muito suspeito
-    # uma vez merece atenção mesmo que a média o dilua.
-    risco = previsoes.groupby(["repositorio", "arquivo"], as_index=False).agg(
+    # O rótulo não pode ser "teve defeito em algum commit": esse
+    # cresce com o número de retratos (28,7% com um retrato, 96,8%
+    # com 10 a 19 no teste), e a precisão no topo chega a 100% sem
+    # dizer nada do modelo. Pelo retrato mais recente, a taxa fica
+    # perto de 30% em todas as faixas.
+    #
+    # idade_dias sozinha empata quando dois commits caem no mesmo
+    # dia, e nesses casos desempata por revisoes, que conta os
+    # commits anteriores do arquivo.
+    ordenadas = previsoes.sort_values(
+        ["repositorio", "arquivo", *COLUNAS_DE_ORDEM], kind="stable")
+
+    # risco_medio e risco_maximo são descritivos: no teste, os dois
+    # ordenam pior que risco_atual
+    risco = ordenadas.groupby(["repositorio", "arquivo"], as_index=False).agg(
         retratos=("probabilidade", "size"),
+        risco_atual=("probabilidade", "last"),
         risco_medio=("probabilidade", "mean"),
         risco_maximo=("probabilidade", "max"),
         commits_com_defeito=("real", "sum"),
+        defeito_atual=("real", "last"),
     )
 
-    # Rótulo do arquivo: teve defeito em algum dos seus commits.
-    # É o gabarito contra o qual a nota por arquivo é medida.
-    risco["teve_defeito"] = (risco["commits_com_defeito"] > 0).astype(int)
-
-    # A nota que ordena o ranking.
-    #
-    # Ordenar pela média crua enche o topo de arquivos com UM
-    # retrato só. Não é coincidência: a média de uma amostra varia
-    # muito mais que a média de sete, então os extremos são
-    # ocupados por quem tem menos evidência, e não por quem tem
-    # mais risco.
-    #
-    # A correção puxa a nota para a média geral na proporção da
-    # evidência disponível:
-    #
-    #     (n * media_do_arquivo + k * media_geral) / (n + k)
-    #
-    # Com n retratos e k de peso: um arquivo com 1 retrato fica
-    # quase na média geral, e um com 20 quase não se move. É a
-    # média bayesiana usada em ranking de avaliações.
-    geral = previsoes["probabilidade"].mean()
-    k = config.PESO_DA_PRIOR
-    n = risco["retratos"]
-
-    risco["risco_ajustado"] = (n * risco["risco_medio"] + k * geral) / (n + k)
-
-    for coluna in ("risco_medio", "risco_maximo", "risco_ajustado"):
+    for coluna in ("risco_atual", "risco_medio", "risco_maximo"):
         risco[coluna] = risco[coluna].round(4)
 
-    risco = risco.sort_values("risco_ajustado", ascending=False,
-                              ignore_index=True)
+    return risco.sort_values("risco_atual", ascending=False, kind="stable",
+                             ignore_index=True)
 
-    risco.to_csv(config.ARQUIVO_RISCO, index=False, encoding="utf-8")
-    return risco
+
+# =============================================================
+# Risco por Commit
+# -------------------------------------------------------------
+# Uma linha por commit, pela maior nota entre os arquivos dele
+# =============================================================
+def risco_por_commit(previsoes: pd.DataFrame) -> pd.DataFrame:
+    # É a unidade do rótulo e da pergunta do projeto: "este commit
+    # introduziu um defeito?". O commit conta como defeituoso se algum
+    # arquivo dele foi marcado, e a Frente 2 usa a mesma maior nota.
+    risco = previsoes.groupby(["repositorio", "commit"], as_index=False).agg(
+        arquivos=("probabilidade", "size"),
+        risco=("probabilidade", "max"),
+        defeito=("real", "max"),
+    )
+
+    return risco.sort_values("risco", ascending=False, kind="stable",
+                             ignore_index=True)
+
+
+# =============================================================
+# Precisao por Repositorio
+# -------------------------------------------------------------
+# Acerto no topo de cada projeto, somado entre os projetos
+# =============================================================
+def precisao_por_repositorio(risco: pd.DataFrame, fracao: float,
+                             rotulo: str = "defeito_atual") -> float:
+    # Espera a tabela ordenada por risco, como risco_por_arquivo e
+    # risco_por_commit a devolvem. É a situação da Frente 2, que ordena
+    # um projeto por vez: o topo geral mistura projetos com taxas de
+    # defeito de 21% a 79% e premia quem está no projeto mais defeituoso.
+    acertos = 0
+    total = 0
+
+    for _, grupo in risco.groupby("repositorio", sort=False):
+        quantos = max(1, round(len(grupo) * fracao))
+        acertos += int(grupo[rotulo].head(quantos).sum())
+        total += quantos
+
+    return acertos / total
+
+
+# =============================================================
+# Mostrar Commits
+# -------------------------------------------------------------
+# O acerto na unidade do rótulo
+# =============================================================
+def mostrar_commits(risco: pd.DataFrame) -> float:
+    y = risco["defeito"].to_numpy()
+    auc = roc_auc_score(y, risco["risco"]) if len(np.unique(y)) > 1 else np.nan
+
+    print(f"\n  Por commit — {len(risco)} commits, {int(y.sum())} com defeito "
+          f"({100 * y.mean():.1f}%)")
+    print(f"    AUC por commit: {auc:.3f}")
+
+    for fracao in config.FRACOES_POR_REPOSITORIO:
+        acerto = precisao_por_repositorio(risco, fracao, "defeito")
+        print(f"    topo {100 * fracao:>2.0f}% dos commits de cada projeto: "
+              f"{100 * acerto:.1f}%")
+
+    return auc
 
 
 # =============================================================
@@ -362,42 +451,43 @@ def risco_por_arquivo(previsoes: pd.DataFrame) -> pd.DataFrame:
 # Os arquivos mais arriscados, e o acerto nessa granularidade
 # =============================================================
 def mostrar_ranking(risco: pd.DataFrame) -> None:
-    y = risco["teve_defeito"].to_numpy()
+    y = risco["defeito_atual"].to_numpy()
 
-    print(f"\n  Por arquivo — {len(risco)} arquivos distintos, "
-          f"{int(y.sum())} com defeito ({100 * y.mean():.1f}%)")
+    print(f"\n  Por arquivo, no retrato mais recente — {len(risco)} arquivos "
+          f"distintos, {int(y.sum())} com defeito ({100 * y.mean():.1f}%)")
 
     if len(np.unique(y)) > 1:
-        # As duas, porque a diferença entre elas é o efeito do
-        # ajuste por evidência
-        print(f"    AUC por arquivo, nota crua     : "
-              f"{roc_auc_score(y, risco['risco_medio']):.3f}")
-        print(f"    AUC por arquivo, nota ajustada : "
-              f"{roc_auc_score(y, risco['risco_ajustado']):.3f}")
+        print(f"    AUC por arquivo: "
+              f"{roc_auc_score(y, risco['risco_atual']):.3f}")
 
     # Precisão no topo é a métrica que importa para uma ferramenta
     # que ORDENA: se o desenvolvedor vai olhar os 50 primeiros, o
     # que vale é quantos daqueles 50 têm defeito mesmo
-    print(f"\n  Precisão no topo do ranking")
+    print(f"\n  Precisão no topo do ranking geral")
     for quantos in config.TOPOS_AVALIADOS:
         if quantos > len(risco):
             continue
-        acertos = int(risco["teve_defeito"].head(quantos).sum())
+        acertos = int(risco["defeito_atual"].head(quantos).sum())
         print(f"    {quantos:>5} primeiros: {acertos:>5} com defeito "
               f"({100 * acertos / quantos:.1f}%)")
     print(f"    {'base':>5}           : {100 * y.mean():.1f}% "
           f"se escolhesse ao acaso")
+
+    print(f"\n  Precisão no topo de cada repositório")
+    for fracao in config.FRACOES_POR_REPOSITORIO:
+        print(f"    {100 * fracao:>4.0f}% do projeto: "
+              f"{100 * precisao_por_repositorio(risco, fracao):.1f}%")
 
     quantos = min(config.TOPO_RANKING, len(risco))
     print(f"\n  Os {quantos} arquivos mais arriscados")
     print(f"    {'nota':>6} {'média':>7} {'retratos':>9} {'real':>5}  arquivo")
 
     for _, linha in risco.head(quantos).iterrows():
-        marca = "sim" if linha["teve_defeito"] else "-"
+        marca = "sim" if linha["defeito_atual"] else "-"
         caminho = f"{linha['repositorio']}/{linha['arquivo']}"
         if len(caminho) > 54:
             caminho = "..." + caminho[-51:]
-        print(f"    {100 * linha['risco_ajustado']:>5.1f}% "
+        print(f"    {100 * linha['risco_atual']:>5.1f}% "
               f"{100 * linha['risco_medio']:>6.1f}% "
               f"{int(linha['retratos']):>9} {marca:>5}  {caminho}")
 
@@ -406,11 +496,36 @@ def mostrar_ranking(risco: pd.DataFrame) -> None:
 
 
 # =============================================================
+# Avaliar Ranking
+# -------------------------------------------------------------
+# Das previsões por retrato até a tabela por arquivo
+# =============================================================
+def avaliar_ranking(previsoes: pd.DataFrame) -> float:
+    auc_commit = mostrar_commits(risco_por_commit(previsoes))
+
+    risco = risco_por_arquivo(acrescentar_ordem(previsoes))
+    risco.to_csv(config.ARQUIVO_RISCO, index=False, encoding="utf-8")
+    mostrar_ranking(risco)
+
+    return auc_commit
+
+
+# =============================================================
 # Avaliar no teste
 # -------------------------------------------------------------
 # A medição final, nos dados reservados
 # =============================================================
 def avaliar_no_teste(modelo, teste: pd.DataFrame) -> dict:
+
+    y = teste[features.COLUNA_ALVO].to_numpy()
+    X = teste[features.FEATURES].to_numpy(dtype=float)
+    auc_com_recentes = roc_auc_score(y, modelo.predict_proba(X)[:, 1])
+
+    # Com ESTRATEGIA_DIVISAO = "defectors" o teste só tem retratos
+    # recentes. Sem nada maduro, a avaliação fica com o que existe.
+    maduros = so_maduros(teste)
+    if len(maduros):
+        teste = maduros
 
     y = teste[features.COLUNA_ALVO].to_numpy()
     X = teste[features.FEATURES].to_numpy(dtype=float)
@@ -423,6 +538,8 @@ def avaliar_no_teste(modelo, teste: pd.DataFrame) -> dict:
     print(f"  {len(teste)} linhas de "
           f"{teste.repositorio.nunique()} repositórios")
     print(f"  {y.sum()} defeituosos ({100 * y.mean():.1f}%)")
+    print(f"  AUC contando também os retratos recentes: "
+          f"{auc_com_recentes:.3f}")
 
     resultado = calcular_metricas(y, probabilidade)
     mostrar_tabela("Resultado", {"modelo": resultado})
@@ -453,7 +570,7 @@ def avaliar_no_teste(modelo, teste: pd.DataFrame) -> dict:
     # A saída que interessa na prática: uma nota por arquivo, e não
     # um número só por projeto
     previsoes = gravar_previsoes(teste, probabilidade)
-    mostrar_ranking(risco_por_arquivo(previsoes))
+    resultado["AUC por commit"] = avaliar_ranking(previsoes)
 
     # Volta para o salvar(), que guarda junto do modelo: a Frente 3
     # mostra a AUC na tela sem precisar reler o terminal
@@ -471,6 +588,11 @@ def salvar(modelo, nome: str, medias: pd.Series,
 
     config.PASTA_MODELOS.mkdir(parents=True, exist_ok=True)
 
+    # Grava ao lado e troca no fim: um reinício no meio da gravação
+    # não pode destruir o modelo que a Frente 2 está usando
+    temporario = config.ARQUIVO_MODELO.with_name(
+        config.ARQUIVO_MODELO.name + ".tmp")
+
     joblib.dump({
         "modelo":   modelo,
         "nome":     nome,
@@ -487,7 +609,8 @@ def salvar(modelo, nome: str, medias: pd.Series,
             pd.read_csv(config.ARQUIVO_DATASET,
                         usecols=["repositorio"])["repositorio"].nunique()),
         "treinado_em": time.strftime("%Y-%m-%d %H:%M"),
-    }, config.ARQUIVO_MODELO, compress=config.COMPRESSAO_DO_MODELO)
+    }, temporario, compress=config.COMPRESSAO_DO_MODELO)
+    os.replace(temporario, config.ARQUIVO_MODELO)
 
     tamanho = config.ARQUIVO_MODELO.stat().st_size / 1e6
     print(f"\n  Modelo gravado: {config.ARQUIVO_MODELO} "
@@ -508,7 +631,7 @@ def salvar(modelo, nome: str, medias: pd.Series,
 # -------------------------------------------------------------
 # Treina o Modelo
 # =============================================================
-def treinar() -> None:
+def treinar(so_final: bool = False) -> None:
 
     features.conferir_sem_vazamento()
 
@@ -524,7 +647,8 @@ def treinar() -> None:
     print("=" * 70)
     print(f"\n  dataset  : {config.ARQUIVO_DATASET}")
     print(f"  features : {len(features.COLUNAS_BASE)} medidas + "
-          f"{len(features.FEATURES) - len(features.COLUNAS_BASE)} derivadas")
+          f"{len(derivadas.colunas_ativas(features.COLUNAS_BASE))} derivadas + "
+          f"{len(features.COLUNAS_COMMIT)} de commit")
     print(f"  derivadas: {derivadas.descrever(features.COLUNAS_BASE)}")
     print(f"  balanceamento: {balanceamento.descrever()}")
     print(f"  divisão  : {divisao.descrever_divisao()}")
@@ -556,8 +680,11 @@ def treinar() -> None:
     grupos, divisor, descricao = divisao.validacao(treino)
     print(f"\n  Validação: {descricao}")
 
-    melhor = comparar_modelos(treino, grupos, divisor)
-    comparar_grupos_de_features(treino, melhor, grupos, divisor)
+    if so_final:
+        melhor = config.MODELO_FINAL
+    else:
+        melhor = comparar_modelos(treino, grupos, divisor)
+        comparar_grupos_de_features(treino, melhor, grupos, divisor)
 
     # O modelo final usa todas as linhas de treino disponíveis.
     modelo = criar_modelos()[melhor]
@@ -585,6 +712,23 @@ def treinar() -> None:
     print(f"\n  {time.time() - inicio:.0f} segundos\n")
 
 
+# =============================================================
+# Recalcular Ranking
+# -------------------------------------------------------------
+# Refaz a tabela por arquivo sem treinar de novo
+# =============================================================
+def recalcular_ranking() -> None:
+    if not config.ARQUIVO_PREVISOES.exists():
+        raise SystemExit(f"{config.ARQUIVO_PREVISOES} não existe. "
+                         f"Rode o treino completo primeiro.")
+
+    avaliar_ranking(pd.read_csv(config.ARQUIVO_PREVISOES))
+
+
 if __name__ == "__main__":
     config.conferir_local()
-    treinar()
+
+    if "--so-ranking" in sys.argv:
+        recalcular_ranking()
+    else:
+        treinar(so_final="--so-final" in sys.argv)

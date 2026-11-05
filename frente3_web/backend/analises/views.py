@@ -108,7 +108,8 @@ class AnalisesView(APIView):
             pronta = Analise.objects.filter(
                 mesmo_repo, commit=commit,
                 status=Analise.Status.CONCLUIDA).first()
-            if pronta:
+            # Análise gravada antes da revisão por commit tem outra nota
+            if pronta and "revisao" in (pronta.resultado or {}):
                 return Response({"id": pronta.id, "reaproveitada": True},
                                 status=status.HTTP_200_OK)
 

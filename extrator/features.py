@@ -96,6 +96,20 @@ COLUNAS_PROPRIEDADE = [
     "arquivos_por_commit",     # tamanho típico dos commits que tocam o arquivo
 ]
 
+# -------------------------------------------------------------
+# Como é o commit (extrator/metricas_commit.py)
+# -------------------------------------------------------------
+# Os arquivos de um commit têm os mesmos valores. Não ficam no
+# dataset.csv: vêm de config.PASTA_COMMITS.
+COLUNAS_COMMIT = [
+    "commit_arquivos",     # arquivos alterados, de qualquer tipo
+    "commit_pastas",       # pastas diferentes tocadas
+    "commit_topos",        # pastas de primeiro nível tocadas
+    "commit_adicionadas",  # linhas adicionadas no commit inteiro
+    "commit_removidas",    # linhas removidas no commit inteiro
+    "commit_entropia",     # quão espalhada a mudança está, de 0 a 1
+]
+
 # =============================================================
 # AS DUAS LISTAS, QUE SÃO COISAS DIFERENTES
 # =============================================================
@@ -130,13 +144,16 @@ def colunas_medidas() -> list[str]:
 
 COLUNAS_BASE = colunas_medidas()
 
-FEATURES = COLUNAS_BASE + derivadas.colunas_ativas(COLUNAS_BASE)
+FEATURES = (COLUNAS_BASE + derivadas.colunas_ativas(COLUNAS_BASE)
+            + COLUNAS_COMMIT)
 
 # =============================================================
 # O QUE O MODELO PREVÊ
 # =============================================================
 
-# 1 para arquivo que contém defeito, 0 para arquivo limpo.
+# 1 para arquivo que ganhou linhas num commit marcado pelo Defectors
+# como causador de defeito, 0 para os demais. É uma marca do commit,
+# copiada para os arquivos dele.
 COLUNA_ALVO = "defeituoso"
 
 # =============================================================
@@ -183,7 +200,7 @@ COLUNAS_CSV = (COLUNAS_IDENTIFICACAO
 # De onde a informação daquela coluna veio
 # =============================================================
 def origem_da_feature(coluna: str) -> str:
-    """Classifica uma feature em código, histórico, caminho ou mista.
+    """Classifica uma feature em commit, código, histórico, caminho ou mista.
 
     Existe para o relatório de importância não mentir. Somar só as
     colunas cruas de histórico ignora que 'revisoes_por_autor' e
@@ -192,6 +209,9 @@ def origem_da_feature(coluna: str) -> str:
     """
     nome = coluna[len(derivadas.PREFIXO_PERCENTIL):] \
         if coluna.startswith(derivadas.PREFIXO_PERCENTIL) else coluna
+
+    if nome in COLUNAS_COMMIT:
+        return "commit"
 
     if nome in COLUNAS_CAMINHO_CONHECIDAS:
         return "caminho"
