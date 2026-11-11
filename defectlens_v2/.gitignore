@@ -1,0 +1,25 @@
+__pycache__/
+*.pyc
+
+# Clones temporários da Frente 2 e do piloto
+clones/
+
+# Tabelas derivadas de ../dados: refeitas por montar_commits.py
+dados/
+
+# Notas por commit da validação: refeitas por avaliar.py
+resultados/previsoes_loro/
+resultados/permutacao_loro/
+resultados/notas_calibradas_natural.csv
+resultados/piloto/*__retratos.csv
+
+# O modelo da v2 tem cerca de 300 KB e sobe junto com o código.
+# A regra da raiz ignora *.joblib; esta linha abre a exceção.
+!modelos/modelo_v2.joblib
+
+# Frente 3
+frente3_web/web/node_modules/
+frente3_web/web/.next/
+frente3_web/web/next-env.d.ts
+*.tsbuildinfo
+frente3_web/backend/db.sqlite3

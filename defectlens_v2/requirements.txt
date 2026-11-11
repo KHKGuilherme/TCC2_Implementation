@@ -1,0 +1,24 @@
+# DefectLens v2 — dependências Python das três frentes.
+# A v2 não mede código: saem radon, lizard, ruff e PyDriller da versão original.
+
+# ---- Dados e modelo ----
+# pandas fica abaixo da versão 3, como na versão original.
+numpy>=2.3.2
+pandas>=2.3.3,<3
+scikit-learn>=1.7.2
+joblib>=1.4.2
+
+# ---- Testes de significância (Wilcoxon pareado) ----
+# Já vinha instalada como dependência do scikit-learn; agora é usada direto.
+scipy>=1.15
+
+# ---- Gráficos da análise ----
+matplotlib>=3.10.0
+
+# ---- Datas dos commits, lidas dos parquets do Defectors ----
+# Só a etapa 1 da Frente 1 usa, e só na primeira vez.
+pyarrow>=22.0.0
+
+# ---- Frente 3: a API web ----
+Django>=5.2
+djangorestframework>=3.16

@@ -1,0 +1,17 @@
+desenho,conjunto,repositorio,commits,auc
+projeto nunca visto (treina nos outros do piloto),sem_experiencia,black,285,0.6762326869806095
+projeto nunca visto (treina nos outros do piloto),sem_experiencia,django-rest-framework,210,0.6455416359616801
+projeto nunca visto (treina nos outros do piloto),sem_experiencia,poetry,485,0.7272041166380789
+projeto nunca visto (treina nos outros do piloto),sem_experiencia,scrapy,153,0.7736625514403292
+projeto conhecido (5 dobras por commit),sem_experiencia,black,285,0.7166759002770082
+projeto conhecido (5 dobras por commit),sem_experiencia,django-rest-framework,210,0.718036109064112
+projeto conhecido (5 dobras por commit),sem_experiencia,poetry,485,0.7585248713550599
+projeto conhecido (5 dobras por commit),sem_experiencia,scrapy,153,0.8325851103628882
+projeto nunca visto (treina nos outros do piloto),com_experiencia,black,285,0.6646537396121884
+projeto nunca visto (treina nos outros do piloto),com_experiencia,django-rest-framework,210,0.6713338246131171
+projeto nunca visto (treina nos outros do piloto),com_experiencia,poetry,485,0.734048027444254
+projeto nunca visto (treina nos outros do piloto),com_experiencia,scrapy,153,0.759072203516648
+projeto conhecido (5 dobras por commit),com_experiencia,black,285,0.7109695290858725
+projeto conhecido (5 dobras por commit),com_experiencia,django-rest-framework,210,0.719141488577745
+projeto conhecido (5 dobras por commit),com_experiencia,poetry,485,0.7586277873070326
+projeto conhecido (5 dobras por commit),com_experiencia,scrapy,153,0.8198653198653199
