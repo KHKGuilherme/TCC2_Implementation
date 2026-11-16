@@ -1,0 +1,67 @@
+/* =============================================================
+   PORCENTAGEM DO REPOSITÓRIO
+   ============================================================= */
+.destaque-porcentagem {
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) 1fr;
+  gap: 28px;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.destaque-numero strong {
+  display: block;
+  font-size: clamp(44px, 7vw, 72px);
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.destaque-numero span {
+  display: block;
+  margin-top: 8px;
+  opacity: 0.75;
+}
+
+.destaque-texto p {
+  margin: 0 0 8px;
+  line-height: 1.55;
+}
+
+.destaque-texto .destaque-faixa {
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+.distribuicao {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.distribuicao-coluna {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+}
+
+.distribuicao-barra {
+  width: 100%;
+  border-radius: 3px 3px 0 0;
+  background: currentColor;
+  opacity: 0.45;
+}
+
+.distribuicao-faixa {
+  opacity: 0.6;
+}
+
+@media (max-width: 760px) {
+  .destaque-porcentagem {
+    grid-template-columns: 1fr;
+  }
+}
