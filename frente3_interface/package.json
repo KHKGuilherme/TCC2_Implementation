@@ -1,0 +1,27 @@
+{
+  "name": "defectlens-interface",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=20.9"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "typecheck": "tsc --noEmit",
+    "tipos": "openapi-typescript ../contratos/api.openapi.json -o src/tipos/api.d.ts && node scripts/sem-comentarios.mjs src/tipos/api.d.ts",
+    "mock": "node mock/servidor.mjs"
+  },
+  "dependencies": {
+    "next": "16.4.6",
+    "react": "19.2.9",
+    "react-dom": "19.2.9"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.3",
+    "openapi-typescript": "7.13.0",
+    "typescript": "5.9.3"
+  }
+}
