@@ -1,9 +1,0 @@
-{
-  "repositorios": 24,
-  "auc": 0.781,
-  "auc_mediano": 0.7839,
-  "auc_retrato": 0.8023,
-  "base": 0.3698,
-  "precisao_topo": 0.7841,
-  "fracao_topo": 0.1
-}
