@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: defectlens-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./frente2_predicao/Dockerfile
+    dockerContext: ./frente2_predicao
+    healthCheckPath: /api/saude/
+    autoDeploy: true
+    envVars:
+      - key: DEFECTLENS_DEBUG
+        value: "0"
+      - key: DEFECTLENS_HOSTS
+        value: "*"
+      - key: DEFECTLENS_CORS
+        value: "*"
+      - key: GITHUB_TOKEN
+        sync: false

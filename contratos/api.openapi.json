@@ -1,0 +1,756 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "API de análise do DefectLens",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8000"
+    }
+  ],
+  "paths": {
+    "/api/saude/": {
+      "get": {
+        "operationId": "saude",
+        "responses": {
+          "200": {
+            "description": "A API está no ar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Saude"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/modelo/": {
+      "get": {
+        "operationId": "modelo",
+        "responses": {
+          "200": {
+            "description": "O modelo em uso e os números de uso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Modelo"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Falha, com a mensagem para o usuário",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/analises/": {
+      "get": {
+        "operationId": "recentes",
+        "responses": {
+          "200": {
+            "description": "Análises recentes, uma por repositório",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AnaliseResumo"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "pedirAnalise",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Pedido"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Já existe análise pronta deste commit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PedidoAceito"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Análise enfileirada ou em andamento",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PedidoAceito"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Falha, com a mensagem para o usuário",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Falha, com a mensagem para o usuário",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/analises/{id}/": {
+      "get": {
+        "operationId": "analise",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Andamento ou resultado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Analise"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Análise inexistente"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Saude": {
+        "type": "object",
+        "required": [
+          "ok"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Erro": {
+        "type": "object",
+        "required": [
+          "erro"
+        ],
+        "properties": {
+          "erro": {
+            "type": "string"
+          }
+        }
+      },
+      "Pedido": {
+        "type": "object",
+        "required": [
+          "endereco"
+        ],
+        "properties": {
+          "endereco": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "ramo": {
+            "type": "string",
+            "maxLength": 200
+          }
+        }
+      },
+      "PedidoAceito": {
+        "type": "object",
+        "required": [
+          "id",
+          "reaproveitada"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reaproveitada": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Validacao": {
+        "type": "object",
+        "required": [],
+        "properties": {
+          "auc_mediano": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "auc_melhor_baseline": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "topo_10": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "taxa_base": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "repositorios": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "erro_porcentagem_pp": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "erro_porcentagem_mediano_pp": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "limiar": {
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        }
+      },
+      "Modelo": {
+        "type": "object",
+        "required": [
+          "versao",
+          "rotulo",
+          "calibracao",
+          "features",
+          "limiar",
+          "treino",
+          "validacao",
+          "importancia",
+          "treinado_em",
+          "uso"
+        ],
+        "properties": {
+          "versao": {
+            "type": "string"
+          },
+          "pergunta": {
+            "type": "string"
+          },
+          "rotulo": {
+            "type": "string"
+          },
+          "variante": {
+            "type": "string"
+          },
+          "calibracao": {
+            "type": "string"
+          },
+          "features": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "limiar": {
+            "type": "number"
+          },
+          "regra_limiar": {
+            "type": "string"
+          },
+          "treino": {
+            "type": "object",
+            "required": [
+              "retratos",
+              "repositorios",
+              "taxa_base",
+              "datas"
+            ],
+            "properties": {
+              "retratos": {
+                "type": "integer"
+              },
+              "repositorios": {
+                "type": "integer"
+              },
+              "taxa_base": {
+                "type": "number"
+              },
+              "datas": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "validacao": {
+            "$ref": "#/components/schemas/Validacao"
+          },
+          "importancia": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "feature",
+                "queda_auc"
+              ],
+              "properties": {
+                "feature": {
+                  "type": "string"
+                },
+                "queda_auc": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          "treinado_em": {
+            "type": "string"
+          },
+          "uso": {
+            "type": "object",
+            "required": [
+              "analises",
+              "repositorios",
+              "arquivos_avaliados"
+            ],
+            "properties": {
+              "analises": {
+                "type": "integer"
+              },
+              "repositorios": {
+                "type": "integer"
+              },
+              "arquivos_avaliados": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      },
+      "ArquivoAnalisado": {
+        "type": "object",
+        "required": [
+          "caminho",
+          "situacao",
+          "probabilidade",
+          "nivel",
+          "posicao",
+          "motivos",
+          "metricas"
+        ],
+        "properties": {
+          "caminho": {
+            "type": "string"
+          },
+          "situacao": {
+            "const": "avaliado"
+          },
+          "probabilidade": {
+            "type": "number"
+          },
+          "nivel": {
+            "enum": [
+              "alto",
+              "medio",
+              "baixo"
+            ]
+          },
+          "posicao": {
+            "type": "integer"
+          },
+          "motivos": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "metricas": {
+            "type": "object",
+            "additionalProperties": {
+              "type": [
+                "number",
+                "null"
+              ]
+            }
+          }
+        }
+      },
+      "Resumo": {
+        "type": "object",
+        "required": [
+          "avaliados",
+          "porcentagem_estimada",
+          "porcentagem_minima",
+          "porcentagem_maxima",
+          "arquivos_esperados",
+          "risco_alto",
+          "porcentagem_acima_do_limiar",
+          "risco_maximo",
+          "limiar",
+          "erro_validacao_pp",
+          "distribuicao",
+          "commits",
+          "consertos",
+          "autores"
+        ],
+        "properties": {
+          "avaliados": {
+            "type": "integer"
+          },
+          "porcentagem_estimada": {
+            "type": "number"
+          },
+          "porcentagem_minima": {
+            "type": "number"
+          },
+          "porcentagem_maxima": {
+            "type": "number"
+          },
+          "arquivos_esperados": {
+            "type": "number"
+          },
+          "risco_alto": {
+            "type": "integer"
+          },
+          "porcentagem_acima_do_limiar": {
+            "type": "number"
+          },
+          "risco_maximo": {
+            "type": "number"
+          },
+          "limiar": {
+            "type": "number"
+          },
+          "erro_validacao_pp": {
+            "type": "number"
+          },
+          "distribuicao": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 10,
+            "maxItems": 10
+          },
+          "commits": {
+            "type": "integer"
+          },
+          "consertos": {
+            "type": "integer"
+          },
+          "autores": {
+            "type": "integer"
+          }
+        }
+      },
+      "Resultado": {
+        "type": "object",
+        "required": [
+          "repositorio",
+          "ramo",
+          "commit",
+          "data_commit",
+          "commits",
+          "modelo",
+          "resumo",
+          "arquivos",
+          "lista_cortada",
+          "duracao_s"
+        ],
+        "properties": {
+          "repositorio": {
+            "type": "string"
+          },
+          "ramo": {
+            "type": "string"
+          },
+          "commit": {
+            "type": "string"
+          },
+          "data_commit": {
+            "type": "string"
+          },
+          "commits": {
+            "type": "integer"
+          },
+          "github": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "modelo": {
+            "type": "object",
+            "required": [
+              "nome",
+              "limiar"
+            ],
+            "properties": {
+              "nome": {
+                "type": "string"
+              },
+              "limiar": {
+                "type": "number"
+              },
+              "versao": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "rotulo": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "treinado_em": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "regra_limiar": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "validacao": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/Validacao"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "resumo": {
+            "$ref": "#/components/schemas/Resumo"
+          },
+          "arquivos": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ArquivoAnalisado"
+            }
+          },
+          "lista_cortada": {
+            "type": "boolean"
+          },
+          "duracao_s": {
+            "type": "number"
+          }
+        }
+      },
+      "Analise": {
+        "type": "object",
+        "required": [
+          "id",
+          "repositorio",
+          "ramo",
+          "commit",
+          "status",
+          "etapa",
+          "progresso",
+          "mensagem",
+          "erro",
+          "criada",
+          "concluida",
+          "posicao_na_fila",
+          "resultado"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "repositorio": {
+            "type": "string"
+          },
+          "ramo": {
+            "type": "string"
+          },
+          "commit": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "na_fila",
+              "rodando",
+              "concluida",
+              "erro"
+            ]
+          },
+          "etapa": {
+            "type": "string"
+          },
+          "progresso": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "mensagem": {
+            "type": "string"
+          },
+          "erro": {
+            "type": "string"
+          },
+          "criada": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "concluida": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "posicao_na_fila": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "resultado": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Resultado"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "AnaliseResumo": {
+        "type": "object",
+        "required": [
+          "id",
+          "repositorio",
+          "ramo",
+          "commit",
+          "status",
+          "criada",
+          "concluida",
+          "avaliados",
+          "risco_alto",
+          "risco_maximo",
+          "porcentagem_estimada"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "repositorio": {
+            "type": "string"
+          },
+          "ramo": {
+            "type": "string"
+          },
+          "commit": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "criada": {
+            "type": "string"
+          },
+          "concluida": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "avaliados": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "risco_alto": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "risco_maximo": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "porcentagem_estimada": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

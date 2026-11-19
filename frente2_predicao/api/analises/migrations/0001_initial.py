@@ -1,0 +1,61 @@
+import uuid
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    initial = True
+
+    dependencies = []
+
+    operations = [
+        migrations.CreateModel(
+            name="Analise",
+            fields=[
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4,
+                        editable=False,
+                        primary_key=True,
+                        serialize=False,
+                    ),
+                ),
+                ("repositorio", models.CharField(max_length=200)),
+                ("ramo", models.CharField(blank=True, max_length=200)),
+                ("commit", models.CharField(blank=True, max_length=40)),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("na_fila", "na fila"),
+                            ("rodando", "rodando"),
+                            ("concluida", "concluída"),
+                            ("erro", "erro"),
+                        ],
+                        default="na_fila",
+                        max_length=10,
+                    ),
+                ),
+                ("etapa", models.CharField(blank=True, max_length=20)),
+                ("progresso", models.FloatField(default=0.0)),
+                ("mensagem", models.CharField(blank=True, max_length=200)),
+                ("erro", models.TextField(blank=True)),
+                ("resultado", models.JSONField(blank=True, null=True)),
+                ("resumo", models.JSONField(blank=True, null=True)),
+                ("criada", models.DateTimeField(auto_now_add=True)),
+                ("concluida", models.DateTimeField(blank=True, null=True)),
+            ],
+            options={
+                "verbose_name": "análise",
+                "verbose_name_plural": "análises",
+                "ordering": ["-criada"],
+                "indexes": [
+                    models.Index(
+                        fields=["repositorio", "commit"],
+                        name="analises_an_reposit_8d36ad_idx",
+                    )
+                ],
+            },
+        ),
+    ]
