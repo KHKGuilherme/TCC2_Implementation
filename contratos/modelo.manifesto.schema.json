@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "modelo.manifesto.schema.json",
+  "title": "Manifesto do modelo",
+  "type": "object",
+  "required": ["contrato", "versao", "rotulo", "calibracao", "features", "limiar", "regra_limiar",
+               "treino", "validacao", "treinado_em", "sklearn", "modelo"],
+  "properties": {
+    "contrato": {"const": 1},
+    "versao": {"type": "string", "minLength": 1},
+    "pergunta": {"type": "string"},
+    "rotulo": {"type": "string", "minLength": 1},
+    "variante": {"type": "string"},
+    "calibracao": {"enum": ["platt", "isotonica", "nenhuma"]},
+    "features": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "limiar": {"type": "number", "minimum": 0, "maximum": 1},
+    "regra_limiar": {"type": "string"},
+    "limiares": {"type": "object", "additionalProperties": {"type": "number"}},
+    "treino": {
+      "type": "object",
+      "required": ["retratos", "repositorios", "taxa_base", "datas"],
+      "properties": {
+        "retratos": {"type": "integer", "minimum": 1},
+        "repositorios": {"type": "integer", "minimum": 1},
+        "taxa_base": {"type": "number", "minimum": 0, "maximum": 1},
+        "datas": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "string"}}
+      }
+    },
+    "validacao": {
+      "type": "object",
+      "properties": {
+        "auc_mediano": {"type": ["number", "null"]},
+        "auc_melhor_baseline": {"type": ["number", "null"]},
+        "topo_10": {"type": ["number", "null"]},
+        "taxa_base": {"type": ["number", "null"]},
+        "repositorios": {"type": ["integer", "null"]},
+        "erro_porcentagem_pp": {"type": ["number", "null"]},
+        "erro_porcentagem_mediano_pp": {"type": ["number", "null"]}
+      }
+    },
+    "importancia": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["feature", "queda_auc"],
+        "properties": {"feature": {"type": "string"}, "queda_auc": {"type": "number"}}
+      }
+    },
+    "treinado_em": {"type": "string"},
+    "sklearn": {"type": "string"},
+    "modelo": {
+      "type": "object",
+      "required": ["arquivo", "sha256"],
+      "properties": {
+        "arquivo": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    }
+  }
+}

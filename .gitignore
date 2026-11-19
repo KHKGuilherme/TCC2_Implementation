@@ -23,3 +23,4 @@ clones/
 nota pessoal/
 datasets/defectors/
 frente1_treinamento/saida/validacao/
+*.egg-info/
