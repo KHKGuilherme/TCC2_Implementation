@@ -6,6 +6,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 
 import Arvore from "@/components/Arvore";
 import FormularioAnalise from "@/components/FormularioAnalise";
+import Medidor from "@/components/Medidor";
 import PainelArquivo from "@/components/PainelArquivo";
 import Progresso from "@/components/Progresso";
 import { buscarAnalise, type Analise, type Resultado } from "@/lib/api";
@@ -181,11 +182,18 @@ function Resultados({ resultado }: { resultado: Resultado }) {
       </header>
 
       <section className="resumo">
-        <div>
-          <p className="resumo-numero">{numero(resumo.porcentagem_estimada)}%</p>
+        <div className="resumo-medidor">
+          <Medidor
+            valor={resumo.porcentagem_estimada}
+            minimo={resumo.porcentagem_minima}
+            maximo={resumo.porcentagem_maxima}
+            tamanho={188}
+            texto={`${numero(resumo.porcentagem_estimada)}%`}
+            rotulo={`${numero(resumo.porcentagem_estimada)}% do repositório com defeito, estimado`}
+          />
           <p className="texto-apoio">do repositório com defeito, estimado</p>
         </div>
-        <div>
+        <div className="resumo-detalhe">
           <p>
             Soma das chances dos {inteiro(resumo.avaliados)} arquivos .py de produção. Faixa provável de{" "}
             {numero(resumo.porcentagem_minima)}% a {numero(resumo.porcentagem_maxima)}%

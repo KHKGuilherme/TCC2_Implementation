@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import FormularioAnalise from "@/components/FormularioAnalise";
+import MapaDeArquivos from "@/components/MapaDeArquivos";
+import Medidor from "@/components/Medidor";
 import { buscarModelo, buscarRecentes, type AnaliseResumo, type Modelo } from "@/lib/api";
 
 const NOMES_DE_MEDIDA: Record<string, string> = {
@@ -69,14 +71,20 @@ export default function Inicio() {
 
   return (
     <div className="inicio">
-      <h1>Quanto do seu repositório tem defeito?</h1>
-      <p className="introducao">
-        Cole o endereço de um repositório Python do GitHub. O DefectLens estima a chance de cada arquivo ter um defeito
-        ainda não consertado e soma as chances para chegar à porcentagem do repositório.
-      </p>
-
-      <FormularioAnalise />
-      {erro && <p className="erro">{erro}</p>}
+      <section className="hero">
+        <div className="hero-texto">
+          <h1>Quanto do seu repositório tem defeito?</h1>
+          <p className="introducao">
+            Cole o endereço de um repositório Python do GitHub. O DefectLens estima a chance de cada arquivo ter um
+            defeito ainda não consertado e soma as chances para chegar à porcentagem do repositório.
+          </p>
+          <FormularioAnalise />
+          {erro && <p className="erro">{erro}</p>}
+        </div>
+        <div className="hero-arte" aria-hidden>
+          <MapaDeArquivos />
+        </div>
+      </section>
 
       {recentes.length > 0 && (
         <section className="secao">
@@ -84,11 +92,18 @@ export default function Inicio() {
           <ul className="recentes">
             {recentes.map((a) => (
               <li key={a.id}>
-                <Link href={`/analise/?id=${a.id}`} prefetch={false}>
-                  <span className="recente-nome">{a.repositorio}</span>
-                  <span className="recente-detalhe">{(a.avaliados ?? 0).toLocaleString("pt-BR")} arquivos</span>
-                  <span>
-                    {a.porcentagem_estimada != null ? `${decimal(a.porcentagem_estimada)}%` : "n/d"}
+                <Link href={`/analise/?id=${a.id}`} prefetch={false} className="recente">
+                  <Medidor
+                    valor={a.porcentagem_estimada ?? 0}
+                    tamanho={58}
+                    rotulo={`${decimal(a.porcentagem_estimada ?? 0)}% estimado`}
+                  />
+                  <span className="recente-texto">
+                    <strong>{a.repositorio}</strong>
+                    <span>{(a.avaliados ?? 0).toLocaleString("pt-BR")} arquivos</span>
+                  </span>
+                  <span className="recente-valor">
+                    {a.porcentagem_estimada != null ? `${decimal(a.porcentagem_estimada, 1)}%` : "n/d"}
                   </span>
                 </Link>
               </li>
@@ -100,50 +115,52 @@ export default function Inicio() {
       {modelo && (
         <section className="secao">
           <h2>Sobre o modelo</h2>
-          <dl className="fatos">
-            <dt>Treinado em</dt>
-            <dd>
-              {modelo.treino.repositorios} projetos e {modelo.treino.retratos.toLocaleString("pt-BR")} retratos de
-              arquivos
-            </dd>
-            {validacao?.auc_mediano != null && (
-              <>
-                <dt>AUC em projetos nunca vistos</dt>
-                <dd>
-                  {decimal(validacao.auc_mediano)}
-                  {validacao.auc_melhor_baseline != null &&
-                    `, contra ${decimal(validacao.auc_melhor_baseline)} da melhor regra simples`}
-                </dd>
-              </>
-            )}
-            {validacao?.erro_porcentagem_pp != null && (
-              <>
-                <dt>Erro da porcentagem</dt>
-                <dd>{decimal(validacao.erro_porcentagem_pp, 1)} pontos percentuais, em média</dd>
-              </>
-            )}
-            <dt>Analisados até agora</dt>
-            <dd>
-              {modelo.uso.repositorios} {modelo.uso.repositorios === 1 ? "repositório" : "repositórios"},{" "}
-              {modelo.uso.arquivos_avaliados.toLocaleString("pt-BR")} arquivos
-            </dd>
-          </dl>
+          <div className="sobre">
+            <dl className="fatos">
+              <dt>Treinado em</dt>
+              <dd>
+                {modelo.treino.repositorios} projetos e {modelo.treino.retratos.toLocaleString("pt-BR")} retratos de
+                arquivos
+              </dd>
+              {validacao?.auc_mediano != null && (
+                <>
+                  <dt>AUC em projetos nunca vistos</dt>
+                  <dd>
+                    {decimal(validacao.auc_mediano)}
+                    {validacao.auc_melhor_baseline != null &&
+                      `, contra ${decimal(validacao.auc_melhor_baseline)} da melhor regra simples`}
+                  </dd>
+                </>
+              )}
+              {validacao?.erro_porcentagem_pp != null && (
+                <>
+                  <dt>Erro da porcentagem</dt>
+                  <dd>{decimal(validacao.erro_porcentagem_pp, 1)} pontos percentuais, em média</dd>
+                </>
+              )}
+              <dt>Analisados até agora</dt>
+              <dd>
+                {modelo.uso.repositorios} {modelo.uso.repositorios === 1 ? "repositório" : "repositórios"},{" "}
+                {modelo.uso.arquivos_avaliados.toLocaleString("pt-BR")} arquivos
+              </dd>
+            </dl>
 
-          {modelo.importancia.length > 0 && (
-            <div className="importancias">
-              <h3>O que mais pesa na estimativa</h3>
-              <ul>
-                {modelo.importancia.slice(0, 8).map((item) => (
-                  <li key={item.feature}>
-                    <span>{nomeDaMedida(item.feature)}</span>
-                    <span className="importancia-barra">
-                      <span style={{ width: `${Math.max(2, (100 * item.queda_auc) / maiorQueda)}%` }} />
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+            {modelo.importancia.length > 0 && (
+              <div className="importancias">
+                <h3>O que mais pesa na estimativa</h3>
+                <ul>
+                  {modelo.importancia.slice(0, 8).map((item) => (
+                    <li key={item.feature}>
+                      <span>{nomeDaMedida(item.feature)}</span>
+                      <span className="importancia-barra">
+                        <span style={{ width: `${Math.max(2, (100 * item.queda_auc) / maiorQueda)}%` }} />
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
         </section>
       )}
     </div>
