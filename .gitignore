@@ -2,38 +2,24 @@ __pycache__/
 *.pyc
 .venv/
 venv/
-.ipynb_checkpoints/
 .vscode/
 .idea/
-
-# Clones temporários que a Fase 2 cria e apaga
+.ipynb_checkpoints/
+.env
+.env.local
+node_modules/
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+db.sqlite3
+chave_secreta.txt
 clones/
-
-# Modelo treinado — 602 MB, acima do limite do GitHub
+*.log
 *.pkl
 *.joblib
-
-# O Defectors baixado e a amostra extraída dele
-defectors/
-defectors_amostra/
-
-# Progresso da montagem: refazível, e pesado
-# dados/parciais/
-
-# O dataset e os resultados sobem
-# (dados/)
-# Frente 3: dependências e build do Next, e o banco local do Django
-frente3_web/web/node_modules/
-frente3_web/web/.next/
-frente3_web/web/next-env.d.ts
-*.tsbuildinfo
-frente3_web/backend/db.sqlite3
-
-# Instruções locais do Claude Code
-CLAUDE.md
-
-# Previsões da validação por repositório: refazíveis
-dados/validacao_repos/
-
-# Notas pessoais: metodologia e instruções do projeto
+!frente1_treinamento/saida/modelo_v3/modelo.joblib
+!frente2_predicao/modelo/modelo.joblib
 nota pessoal/
+datasets/defectors/
+frente1_treinamento/saida/validacao/
