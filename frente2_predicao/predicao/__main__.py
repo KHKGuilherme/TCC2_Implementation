@@ -30,6 +30,7 @@ def principal(argumentos: list[str]) -> int:
         print(f"Erro: {erro}", file=sys.stderr)
         return 2
     if em_json:
+        sys.stdout.reconfigure(encoding="utf-8")
         print(json.dumps(resultado, ensure_ascii=False))
     else:
         mostrar(resultado)
