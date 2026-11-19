@@ -1,10 +1,6 @@
-# *TCC2 - Implementation*
-Este repositório tem como objetivo armazenar e documentar todo o progresso do desenvolvimento do código para o TCC 2.
+# DefectLens
 
----
-
-**Trabalho de Conclusão de Curso — Engenharia de Computação**
-Universidade Tecnológica Federal do Paraná — Câmpus Apucarana
+Trabalho de Conclusão de Curso de Engenharia de Computação, Universidade Tecnológica Federal do Paraná, Câmpus Apucarana.
 
 | | |
 |---|---|
@@ -12,22 +8,26 @@ Universidade Tecnológica Federal do Paraná — Câmpus Apucarana
 | **Orientador** | Prof. Me. Muriel de Souza Godoi |
 | **Coorientador** | Prof. Dr. Luiz Fernando Carvalho |
 
----
- 
-## Arquitetura
- 
-O sistema se divide em três frentes
- 
-### Frente 1 — Treinamento (offline)
+O usuário cola o endereço de um repositório Python do GitHub e recebe a chance de cada arquivo `.py` ter um defeito ainda não consertado e a porcentagem estimada do repositório com defeito.
 
-Parte de um arquivo CSV já existente em disco. Não clona nada, não acessa a internet. Entrega um modelo serializado.
- 
-### Frente 2 — Extração de um indivíduo
+## Estrutura
 
-Recebe uma URL e devolve uma única linha, com exatamente as mesmas colunas, na mesma ordem, calculadas da mesma forma que as do treino.
- 
-### Frente 3 — Aplicação web
- 
+O projeto tem três frentes independentes. Nenhuma importa código de outra. Elas só se encontram nos contratos.
+
+| Pasta | Papel |
+|---|---|
+| `frente1_treinamento/` | Cria, valida e treina o modelo. Entrega a pasta `modelo_v3/` com o modelo e o manifesto |
+| `frente2_predicao/` | Recebe o endereço de um repositório, aplica o modelo da Frente 1 e devolve o resultado. Tem a API |
+| `frente3_interface/` | O site. Mostra o formulário, o andamento e o resultado, chamando a API da Frente 2 |
+| `contratos/` | O manifesto do modelo, a especificação da API e os exemplos que as frentes usam nos testes |
+| `datasets/` | Todos os conjuntos de dados. Só a Frente 1 lê esta pasta |
+
+Cada frente tem um README com a instalação, a execução e os testes.
+
+## Fluxo
+
 ```
-usuário → URL → Frente 2 → modelo da Frente 1 → Score
+datasets  ->  frente1  ->  modelo + manifesto  ->  frente2  ->  API (JSON)  ->  frente3
 ```
+
+O contrato 1 é a pasta do modelo, entre a Frente 1 e a Frente 2. O contrato 2 é `contratos/api.openapi.json`, entre a Frente 2 e a Frente 3.
