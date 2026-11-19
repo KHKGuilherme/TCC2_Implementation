@@ -1,0 +1,54 @@
+{
+  "assinatura": {
+    "subpasta": "line_bug_prediction_splits",
+    "esquema": "time",
+    "incluidos": [],
+    "teste": [
+      "redash",
+      "black"
+    ],
+    "amostra": 0,
+    "semente": 42,
+    "tamanho_maximo": 262144,
+    "pastas": [
+      "docs/",
+      "doc/",
+      "examples/",
+      "benchmarks/",
+      "profiling/"
+    ],
+    "arquivos": [
+      "setup.py",
+      "conftest.py",
+      "_version.py",
+      "versioneer.py"
+    ]
+  },
+  "repositorios": [
+    "airflow",
+    "ansible",
+    "black",
+    "celery",
+    "core",
+    "cpython",
+    "django",
+    "django-rest-framework",
+    "freqtrade",
+    "jax",
+    "lightning",
+    "localstack",
+    "numpy",
+    "openpilot",
+    "pandas",
+    "pipenv",
+    "poetry",
+    "ray",
+    "redash",
+    "scikit-learn",
+    "scrapy",
+    "sentry",
+    "spaCy",
+    "transformers",
+    "yolov5"
+  ]
+}

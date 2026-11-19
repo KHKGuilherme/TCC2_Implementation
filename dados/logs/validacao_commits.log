@@ -1,0 +1,54 @@
+  22 repositórios prontos, 2 pendentes
+  freqtrade: 1 linhas, 170 s
+  black: 381 linhas, 170 s
+
+======================================================================
+PROJETO NUNCA VISTO — 24 repositórios
+======================================================================
+
+  Mesmas 47409 linhas, por retrato
+    projeto conhecido: 0.833
+    projeto novo     : 0.804
+
+  repositório              commits   base AUC commit  topo 10%  topo 20%  AUC arq.
+  ansible                    19744  35.0%      0.767     72.4%     66.6%     0.845
+  core                        9147  45.8%      0.789     84.7%     80.9%     0.816
+  sentry                     12608  28.4%      0.825     77.9%     66.9%     0.813
+  ray                         3243  39.2%      0.784     76.5%     74.1%     0.816
+  airflow                     2414  39.6%      0.796     84.6%     76.0%     0.805
+  cpython                     2453  34.4%      0.769     73.5%     66.4%     0.825
+  django                      4275  39.4%      0.770     79.0%     70.5%     0.817
+  pandas                      5249  42.6%      0.783     85.1%     76.5%     0.824
+  scikit-learn                1633  45.0%      0.795     89.6%     81.7%     0.916
+  lightning                   2974  44.0%      0.832     88.2%     85.9%     0.713
+  transformers                 224  25.4%      0.857     72.7%     66.7%     0.888
+  poetry                       490  44.9%      0.796     89.8%     85.7%     0.924
+  celery                      1538  18.7%      0.813     59.7%     50.3%     0.668
+  spaCy                        831  42.2%      0.819     89.2%     80.7%     0.826
+  numpy                        314  39.2%      0.744     71.0%     68.3%     0.830
+  scrapy                       153  35.3%      0.859     93.3%     77.4%     0.901
+  redash                       288  15.3%      0.826     55.2%     44.8%     0.911
+  localstack                   525  39.8%      0.726     73.1%     62.9%     0.842
+  jax                          251  51.0%      0.760     84.0%     82.0%     0.684
+  django-rest-framework        211  55.9%      0.725     90.5%     81.0%     0.801
+  black                        292  32.5%      0.745     82.8%     65.5%     0.875
+  pipenv                        32  21.9%      0.783     66.7%     66.7%     0.866
+  yolov5                       418  52.2%      0.741     92.9%     84.5%     0.826
+  freqtrade                      1 100.0%        nan    100.0%    100.0%       nan
+
+  Mediana entre os 23 repositórios com 30+ arquivos
+    AUC por commit  : 0.784
+    AUC por retrato : 0.807
+    AUC por arquivo : 0.826
+
+  Todos os 69308 commits, base 37.0%
+    topo 10% de cada projeto: 78.4%
+    topo 20% de cada projeto: 71.4%
+
+  Todos os 21254 arquivos, base 41.2%
+    topo 10% de cada projeto: 80.9%
+    topo 20% de cada projeto: 74.1%
+
+  AUC agregado: por commit 0.781, por retrato 0.802
+
+  Quadro gravado: dados\resultado_por_repositorio.csv

@@ -1,0 +1,14 @@
+**/node_modules
+**/.next
+**/__pycache__
+**/*.pyc
+**/db.sqlite3
+**/chave_secreta.txt
+clones
+dados
+resultados
+pilotos
+frente1_treinamento
+*.md
+.git
+.github

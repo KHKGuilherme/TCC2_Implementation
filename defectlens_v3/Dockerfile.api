@@ -1,0 +1,35 @@
+# DefectLens v3 — só a API (Django + gunicorn) para o Render.
+# O site Next.js fica na Vercel e chama esta API direto do navegador.
+
+FROM python:3.14-slim
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN useradd --create-home --uid 1000 user
+ENV HOME=/home/user \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    DEFECTLENS_DEBUG=0 \
+    DEFECTLENS_HOSTS=* \
+    DEFECTLENS_DADOS=/home/user/dados \
+    DEFECTLENS_CLONES=/home/user/dados/clones
+
+WORKDIR /home/user/app
+COPY requirements-deploy.txt ./
+RUN pip install --no-cache-dir -r requirements-deploy.txt
+
+COPY --chown=user config.py ./
+COPY --chown=user extrator/ ./extrator/
+COPY --chown=user frente2_predicao/ ./frente2_predicao/
+COPY --chown=user frente3_web/backend/ ./frente3_web/backend/
+COPY --chown=user modelos/ ./modelos/
+
+RUN mkdir -p /home/user/dados/clones && chown -R user:user /home/user
+
+USER user
+WORKDIR /home/user/app/frente3_web/backend
+EXPOSE 10000
+
+CMD ["sh", "-c", "python manage.py migrate --noinput && exec gunicorn servidor.wsgi:application --bind 0.0.0.0:${PORT:-10000} --workers 1 --threads 8 --timeout 120 --access-logfile - --error-logfile -"]

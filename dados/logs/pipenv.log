@@ -1,0 +1,25 @@
+======================================================================
+MONTAGEM DO DATASET
+======================================================================
+
+  origem  : defectors/
+  destino : dados\dataset.csv
+  escopo  : todos
+  divisão : GroupShuffleSplit por arquivo — 30% dos arquivos
+  amostra : dataset completo
+  parciais: dados\parciais\191f4dc636/
+
+----------------------------------------------------------------------
+ETAPA 1 — separar o Defectors em um parquet por repositório
+----------------------------------------------------------------------
+
+  Separação reaproveitada: 25 repositórios.
+
+----------------------------------------------------------------------
+ETAPA 2 — um repositório por vez: mede, clona, grava, apaga
+----------------------------------------------------------------------
+
+  [16/25] pipenv                   código reaproveitado (90) clonando... 39/39 commits ............. 13s 90 linhas (0 sem histórico)
+
+  pipenv concluído em 31 segundos.
+

@@ -1,0 +1,70 @@
+  [1/24] airflow: 6809 linhas, 7 s
+  [2/24] ansible: 35528 linhas, 5 s
+  [3/24] black: 381 linhas, 7 s
+  [4/24] celery: 3021 linhas, 7 s
+  [5/24] core: 26728 linhas, 7 s
+  [6/24] cpython: 4256 linhas, 7 s
+  [7/24] django: 9379 linhas, 7 s
+  [8/24] django-rest-framework: 377 linhas, 7 s
+  [9/24] freqtrade: 1 linhas, 7 s
+  [10/24] jax: 602 linhas, 7 s
+  [11/24] lightning: 7018 linhas, 7 s
+  [12/24] localstack: 1218 linhas, 7 s
+  [13/24] numpy: 647 linhas, 7 s
+  [14/24] pandas: 12625 linhas, 6 s
+  [15/24] pipenv: 76 linhas, 7 s
+  [16/24] poetry: 1462 linhas, 7 s
+  [17/24] ray: 10945 linhas, 7 s
+  [18/24] redash: 605 linhas, 7 s
+  [19/24] scikit-learn: 3671 linhas, 7 s
+  [20/24] scrapy: 350 linhas, 7 s
+  [21/24] sentry: 27796 linhas, 6 s
+  [22/24] spaCy: 1604 linhas, 7 s
+  [23/24] transformers: 923 linhas, 7 s
+  [24/24] yolov5: 789 linhas, 7 s
+
+======================================================================
+PROJETO NUNCA VISTO — 24 repositórios
+======================================================================
+
+  Mesmas 47714 linhas, por retrato
+    projeto conhecido: 0.704
+    projeto novo     : 0.636
+
+  repositório                arq.   base  AUC arq.  topo 10%  topo 20%
+  ansible                    5546  23.0%     0.532     28.1%     26.7%
+  core                       4632  60.0%     0.586     72.4%     66.8%
+  sentry                     2951  33.2%     0.755     57.3%     54.7%
+  ray                        1584  42.3%     0.496     44.9%     44.2%
+  airflow                    1357  56.7%     0.594     66.9%     64.6%
+  cpython                     988  31.2%     0.657     40.4%     44.9%
+  django                      731  44.2%     0.581     46.6%     50.7%
+  pandas                      476  54.4%     0.640     64.6%     70.5%
+  scikit-learn                475  53.1%     0.653     58.3%     55.8%
+  lightning                   464  41.8%     0.561     39.1%     46.2%
+  transformers                383  28.2%     0.500     23.7%     27.3%
+  poetry                      257  71.6%     0.616     88.5%     82.4%
+  celery                      256  29.7%     0.532     26.9%     29.4%
+  spaCy                       249  46.2%     0.687     72.0%     68.0%
+  numpy                       183  52.5%     0.453     38.9%     51.4%
+  scrapy                      181  51.4%     0.670     72.2%     61.1%
+  redash                      159  45.3%     0.537     43.8%     31.2%
+  localstack                  132  57.6%     0.635     92.3%     73.1%
+  jax                          88  36.4%     0.634     66.7%     50.0%
+  django-rest-framework        48  62.5%     0.480     60.0%     50.0%
+  black                        40  62.5%     0.393     75.0%     62.5%
+  pipenv                       38  44.7%     0.646     50.0%     50.0%
+  yolov5                       35  54.3%     0.484     75.0%     57.1%
+  freqtrade                     1 100.0%       nan    100.0%    100.0%
+
+  Mediana entre os 23 repositórios com 30+ arquivos
+    AUC por retrato : 0.610
+    AUC por arquivo : 0.586
+
+  Todos os 21254 arquivos, base 41.2%
+    topo 10% de cada projeto: 51.1%
+    topo 20% de cada projeto: 49.1%
+
+  AUC agregado por retrato: 0.642
+
+  Quadro gravado: dados\resultado_por_repositorio.csv

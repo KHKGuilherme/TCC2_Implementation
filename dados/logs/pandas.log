@@ -1,0 +1,25 @@
+======================================================================
+MONTAGEM DO DATASET
+======================================================================
+
+  origem  : defectors/
+  destino : dados\dataset.csv
+  escopo  : todos
+  divisão : GroupShuffleSplit por arquivo — 30% dos arquivos
+  amostra : dataset completo
+  parciais: dados\parciais\191f4dc636/
+
+----------------------------------------------------------------------
+ETAPA 1 — separar o Defectors em um parquet por repositório
+----------------------------------------------------------------------
+
+  Separação reaproveitada: 25 repositórios.
+
+----------------------------------------------------------------------
+ETAPA 2 — um repositório por vez: mede, clona, grava, apaga
+----------------------------------------------------------------------
+
+  [15/25] pandas                   código reaproveitado (13363) clonando... 5525/5525 commits .......... 153s 13363 linhas (0 sem histórico)
+
+  pandas concluído em 313 segundos.
+
