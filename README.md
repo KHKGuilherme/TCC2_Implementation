@@ -30,4 +30,12 @@ Cada frente tem um README com a instalação, a execução e os testes.
 datasets  ->  frente1  ->  modelo + manifesto  ->  frente2  ->  API (JSON)  ->  frente3
 ```
 
-O contrato 1 é a pasta do modelo, entre a Frente 1 e a Frente 2. O contrato 2 é `contratos/api.openapi.json`, entre a Frente 2 e a Frente 3.
+## *Links para Testar*
+* *https://github.com/encode/django-rest-framework*
+* *https://github.com/psf/requests*
+* *https://github.com/pallets/flask*
+* *https://github.com/scrapy/scrapy*
+* *O contrato 1 é a pasta do modelo, entre a Frente 1 e a Frente 2. O contrato 2 é `contratos/api.openapi.json`, entre a Frente 2 e a Frente 3.*
+
+## *Link*
+* *https://defectlens.udas.workers.dev/*
