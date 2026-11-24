@@ -14,5 +14,7 @@ services:
         value: "*"
       - key: DEFECTLENS_CORS
         value: "*"
+      - key: DEFECTLENS_MAX_KB
+        value: "120000"
       - key: GITHUB_TOKEN
         sync: false

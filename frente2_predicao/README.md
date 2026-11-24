@@ -59,3 +59,7 @@ python manage.py test
 ## Publicação
 
 O `Dockerfile` e o `render.yaml` publicam a API no Render. No Render, escolha New, Blueprint, o repositório do projeto e `frente2_predicao/render.yaml` como caminho do Blueprint.
+
+O plano gratuito tem 512 MB de memória. Medido em 24/11/2026, o pico de uma análise (git e Python juntos) foi de 233 MB no `psf/requests`, 251 MB no `pallets/flask`, 330 MB no `scrapy/scrapy` e 509 MB no `django/django`, de 285 MB. Por isso o `render.yaml` limita o repositório a 120 MB (`DEFECTLENS_MAX_KB`), e a fila roda uma análise por vez. O plano gratuito também desliga o servidor depois de 15 minutos sem uso, e a primeira chamada seguinte leva cerca de um minuto.
+
+O Hugging Face Spaces, escolhido antes, passou a exigir assinatura para Spaces com Docker.
