@@ -330,86 +330,79 @@ function Resultados({ resultado }: { resultado: Resultado }): JSX.Element {
           </div>
 
           <div className="filtros">
-            <span className="filtros-rotulo" id="rotulo-faixa">
-              Chance do arquivo
-            </span>
-            <div className="filtros-controles" role="group" aria-labelledby="rotulo-faixa">
-              <label htmlFor="faixa-de">de</label>
-              <span className="campo-porcento">
-                <input
-                  id="faixa-de"
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  max={100}
-                  step={1}
-                  value={textoDe}
-                  onChange={(e) => setTextoDe(e.target.value)}
-                />
-                <span aria-hidden>%</span>
-              </span>
-              <label htmlFor="faixa-ate">até</label>
-              <span className="campo-porcento">
-                <input
-                  id="faixa-ate"
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  max={100}
-                  step={1}
-                  value={textoAte}
-                  onChange={(e) => setTextoAte(e.target.value)}
-                />
-                <span aria-hidden>%</span>
-              </span>
-              <span className="filtros-atalhos">
-                <button type="button" className={`chip${faixaAtiva ? "" : " ativo"}`} onClick={() => escolherFaixa(0, 100)}>
-                  todos
-                </button>
-                <button
-                  type="button"
-                  className={`chip${de === Number(textoDoPorcento(limiar)) && ate === 100 ? " ativo" : ""}`}
-                  onClick={() => escolherFaixa(Number(textoDoPorcento(limiar)), 100)}
-                >
-                  acima do limiar
-                </button>
+            <div className="alternador alternador-campos" role="group" aria-label="Chance do arquivo, em porcentagem">
+              <span className="alternador-rotulo">chance</span>
+              <input
+                id="faixa-de"
+                type="number"
+                inputMode="decimal"
+                min={0}
+                max={100}
+                step={1}
+                value={textoDe}
+                onChange={(e) => setTextoDe(e.target.value)}
+                aria-label="Chance mínima, em porcentagem"
+              />
+              <span aria-hidden>–</span>
+              <input
+                id="faixa-ate"
+                type="number"
+                inputMode="decimal"
+                min={0}
+                max={100}
+                step={1}
+                value={textoAte}
+                onChange={(e) => setTextoAte(e.target.value)}
+                aria-label="Chance máxima, em porcentagem"
+              />
+              <span className="alternador-unidade" aria-hidden>
+                %
               </span>
             </div>
 
-            <span className="filtros-rotulo" id="rotulo-limiar">
-              Limiar de risco alto
-            </span>
-            <div className="filtros-controles" role="group" aria-labelledby="rotulo-limiar">
-              <span className={`campo-porcento${usarLimiarManual ? "" : " desligado"}`}>
-                <input
-                  id="limiar-valor"
-                  type="number"
-                  inputMode="decimal"
-                  min={1}
-                  max={99}
-                  step={1}
-                  disabled={!usarLimiarManual}
-                  value={usarLimiarManual ? textoLimiar : textoDoPorcento(limiarModelo)}
-                  onChange={(e) => setTextoLimiar(e.target.value)}
-                  aria-label="Limiar de risco alto, em porcentagem"
-                />
-                <span aria-hidden>%</span>
-              </span>
-              <label className="filtro-opcao" htmlFor="limiar-manual">
-                <input
-                  id="limiar-manual"
-                  type="checkbox"
-                  checked={usarLimiarManual}
-                  onChange={(e) => setUsarLimiarManual(e.target.checked)}
-                />
-                definir manualmente
-              </label>
-              {usarLimiarManual ? (
-                <button type="button" className="filtro-link" onClick={() => setTextoLimiar(textoDoPorcento(limiarModelo))}>
-                  voltar a {porcento(limiarModelo, 0)}
-                </button>
-              ) : (
-                <span className="filtro-nota">valor do modelo, maior F1 na validação</span>
+            <div className="alternador" role="group" aria-label="Atalhos de faixa">
+              <button type="button" className={faixaAtiva ? "" : "ativo"} onClick={() => escolherFaixa(0, 100)}>
+                todos
+              </button>
+              <button
+                type="button"
+                className={de === Number(textoDoPorcento(limiar)) && ate === 100 ? "ativo" : ""}
+                onClick={() => escolherFaixa(Number(textoDoPorcento(limiar)), 100)}
+              >
+                acima do limiar
+              </button>
+            </div>
+
+            <div className="alternador alternador-campos" role="group" aria-label="Limiar de risco alto">
+              <span className="alternador-rotulo">limiar</span>
+              <button
+                type="button"
+                className={usarLimiarManual ? "" : "ativo"}
+                onClick={() => setUsarLimiarManual(false)}
+                title="Limiar de maior F1 na validação em repositórios nunca vistos"
+              >
+                modelo {porcento(limiarModelo, 0)}
+              </button>
+              <button type="button" className={usarLimiarManual ? "ativo" : ""} onClick={() => setUsarLimiarManual(true)}>
+                manual
+              </button>
+              {usarLimiarManual && (
+                <>
+                  <input
+                    id="limiar-valor"
+                    type="number"
+                    inputMode="decimal"
+                    min={1}
+                    max={99}
+                    step={1}
+                    value={textoLimiar}
+                    onChange={(e) => setTextoLimiar(e.target.value)}
+                    aria-label="Limiar de risco alto, em porcentagem"
+                  />
+                  <span className="alternador-unidade" aria-hidden>
+                    %
+                  </span>
+                </>
               )}
             </div>
           </div>
