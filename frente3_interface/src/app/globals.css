@@ -686,40 +686,123 @@ button.distribuicao-coluna {
   opacity: 0.22;
 }
 
-.filtros {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px 18px;
-  margin-bottom: 12px;
+.distribuicao-numero.vazio {
+  opacity: 0.55;
 }
 
-.filtro {
+.filtros {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: start;
+  gap: 14px 18px;
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--linha);
+  border-radius: 12px;
+}
+
+.filtros-rotulo {
+  line-height: 36px;
+  color: var(--apoio);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.filtros-controles {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 8px;
+  gap: 8px 10px;
   min-width: 0;
-  margin: 0;
-  padding: 8px 12px 10px;
-  border: 1px solid var(--linha);
-  border-radius: 10px;
   color: var(--apoio);
   font-size: 14px;
 }
 
-.filtro legend {
-  padding: 0 4px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+.campo-porcento {
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  padding-right: 10px;
+  border: 1px solid var(--linha);
+  border-radius: 8px;
+  background: var(--fundo);
+  color: var(--apoio);
+  transition: border-color 0.15s;
 }
 
-.filtro .campo-numero {
-  width: 4.6em;
-  padding: 6px 8px;
+.campo-porcento:focus-within {
+  border-color: var(--acento);
+}
+
+.campo-porcento input {
+  width: 3.4em;
+  height: 100%;
+  padding: 0 4px 0 10px;
+  border: 0;
+  background: none;
   text-align: right;
   font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.campo-porcento input:focus {
+  box-shadow: none;
+}
+
+.campo-porcento input::-webkit-outer-spin-button,
+.campo-porcento input::-webkit-inner-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+.campo-porcento.desligado {
+  opacity: 0.55;
+}
+
+.filtros-atalhos {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: 6px;
+}
+
+.chip {
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--linha);
+  border-radius: 999px;
+  background: none;
+  color: var(--apoio);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.chip:hover {
+  border-color: var(--acento);
+}
+
+.chip.ativo {
+  border-color: var(--acento);
+  background: var(--acento-suave);
+  color: var(--texto);
+}
+
+@media (max-width: 560px) {
+  .filtros {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .filtros-controles + .filtros-rotulo {
+    margin-top: 10px;
+  }
+
+  .filtros-atalhos {
+    margin-left: 0;
+  }
 }
 
 .filtro-opcao {

@@ -134,7 +134,7 @@ function Distribuicao({ contagens, de, ate, escolher }: PropsDistribuicao): JSX.
             aria-label={`Mostrar os ${quantos} arquivo(s) entre ${inicio}% e ${fim}%`}
             onClick={() => escolher(inicio, fim)}
           >
-            <span className="distribuicao-numero">{quantos > 0 ? quantos : ""}</span>
+            <span className={`distribuicao-numero${quantos === 0 ? " vazio" : ""}`}>{quantos}</span>
             <span className="distribuicao-barra" style={{ height: `${Math.max(2, (64 * quantos) / maior)}px` }} />
             <span className="distribuicao-faixa">{inicio}%</span>
           </button>
@@ -330,37 +330,71 @@ function Resultados({ resultado }: { resultado: Resultado }): JSX.Element {
           </div>
 
           <div className="filtros">
-            <fieldset className="filtro">
-              <legend>Chance do arquivo</legend>
+            <span className="filtros-rotulo" id="rotulo-faixa">
+              Chance do arquivo
+            </span>
+            <div className="filtros-controles" role="group" aria-labelledby="rotulo-faixa">
               <label htmlFor="faixa-de">de</label>
-              <input
-                id="faixa-de"
-                className="campo-numero"
-                type="number"
-                inputMode="decimal"
-                min={0}
-                max={100}
-                step={1}
-                value={textoDe}
-                onChange={(e) => setTextoDe(e.target.value)}
-              />
-              <label htmlFor="faixa-ate">% até</label>
-              <input
-                id="faixa-ate"
-                className="campo-numero"
-                type="number"
-                inputMode="decimal"
-                min={0}
-                max={100}
-                step={1}
-                value={textoAte}
-                onChange={(e) => setTextoAte(e.target.value)}
-              />
-              <span>%</span>
-            </fieldset>
+              <span className="campo-porcento">
+                <input
+                  id="faixa-de"
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={textoDe}
+                  onChange={(e) => setTextoDe(e.target.value)}
+                />
+                <span aria-hidden>%</span>
+              </span>
+              <label htmlFor="faixa-ate">até</label>
+              <span className="campo-porcento">
+                <input
+                  id="faixa-ate"
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={textoAte}
+                  onChange={(e) => setTextoAte(e.target.value)}
+                />
+                <span aria-hidden>%</span>
+              </span>
+              <span className="filtros-atalhos">
+                <button type="button" className={`chip${faixaAtiva ? "" : " ativo"}`} onClick={() => escolherFaixa(0, 100)}>
+                  todos
+                </button>
+                <button
+                  type="button"
+                  className={`chip${de === Number(textoDoPorcento(limiar)) && ate === 100 ? " ativo" : ""}`}
+                  onClick={() => escolherFaixa(Number(textoDoPorcento(limiar)), 100)}
+                >
+                  acima do limiar
+                </button>
+              </span>
+            </div>
 
-            <fieldset className="filtro">
-              <legend>Limiar de risco alto</legend>
+            <span className="filtros-rotulo" id="rotulo-limiar">
+              Limiar de risco alto
+            </span>
+            <div className="filtros-controles" role="group" aria-labelledby="rotulo-limiar">
+              <span className={`campo-porcento${usarLimiarManual ? "" : " desligado"}`}>
+                <input
+                  id="limiar-valor"
+                  type="number"
+                  inputMode="decimal"
+                  min={1}
+                  max={99}
+                  step={1}
+                  disabled={!usarLimiarManual}
+                  value={usarLimiarManual ? textoLimiar : textoDoPorcento(limiarModelo)}
+                  onChange={(e) => setTextoLimiar(e.target.value)}
+                  aria-label="Limiar de risco alto, em porcentagem"
+                />
+                <span aria-hidden>%</span>
+              </span>
               <label className="filtro-opcao" htmlFor="limiar-manual">
                 <input
                   id="limiar-manual"
@@ -371,28 +405,13 @@ function Resultados({ resultado }: { resultado: Resultado }): JSX.Element {
                 definir manualmente
               </label>
               {usarLimiarManual ? (
-                <>
-                  <input
-                    id="limiar-valor"
-                    className="campo-numero"
-                    type="number"
-                    inputMode="decimal"
-                    min={1}
-                    max={99}
-                    step={1}
-                    value={textoLimiar}
-                    onChange={(e) => setTextoLimiar(e.target.value)}
-                    aria-label="Limiar de risco alto, em porcentagem"
-                  />
-                  <span>%</span>
-                  <button type="button" className="filtro-link" onClick={() => setTextoLimiar(textoDoPorcento(limiarModelo))}>
-                    voltar a {porcento(limiarModelo, 0)}
-                  </button>
-                </>
+                <button type="button" className="filtro-link" onClick={() => setTextoLimiar(textoDoPorcento(limiarModelo))}>
+                  voltar a {porcento(limiarModelo, 0)}
+                </button>
               ) : (
-                <span className="filtro-nota">modelo: {porcento(limiarModelo, 0)}, maior F1 na validação</span>
+                <span className="filtro-nota">valor do modelo, maior F1 na validação</span>
               )}
-            </fieldset>
+            </div>
           </div>
 
           {filtroAtivo && (
