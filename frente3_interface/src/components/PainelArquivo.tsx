@@ -1,9 +1,12 @@
+import type { JSX } from "react";
+
 import type { ArquivoAnalisado, Resultado } from "@/lib/api";
 import { nivel, porcento, ROTULO_NIVEL } from "@/lib/arvore";
 
 interface Props {
   arquivo: ArquivoAnalisado | null;
   resultado: Resultado;
+  limiar: number;
 }
 
 const MEDIDAS: { coluna: string; rotulo: string }[] = [
@@ -25,7 +28,7 @@ function formatar(valor: number | null | undefined): string {
   return Math.round(valor).toLocaleString("pt-BR");
 }
 
-export default function PainelArquivo({ arquivo, resultado }: Props) {
+export default function PainelArquivo({ arquivo, resultado, limiar }: Props): JSX.Element {
   if (!arquivo) {
     return (
       <aside className="bloco painel">
@@ -34,7 +37,6 @@ export default function PainelArquivo({ arquivo, resultado }: Props) {
     );
   }
 
-  const limiar = resultado.modelo.limiar;
   const faixa = nivel(arquivo.probabilidade, limiar);
   const linkGithub = `https://github.com/${resultado.repositorio}/blob/${resultado.commit}/${arquivo.caminho}`;
   const escala = Math.max(resultado.resumo.risco_maximo, limiar, 0.01);

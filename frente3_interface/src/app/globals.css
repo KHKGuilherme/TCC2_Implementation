@@ -674,6 +674,89 @@ main {
   opacity: 0.7;
 }
 
+button.distribuicao-coluna {
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  font: inherit;
+}
+
+.distribuicao-coluna.fora .distribuicao-barra {
+  opacity: 0.22;
+}
+
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  margin-bottom: 12px;
+}
+
+.filtro {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 8px 12px 10px;
+  border: 1px solid var(--linha);
+  border-radius: 10px;
+  color: var(--apoio);
+  font-size: 14px;
+}
+
+.filtro legend {
+  padding: 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.filtro .campo-numero {
+  width: 4.6em;
+  padding: 6px 8px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.filtro-opcao {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--texto);
+  cursor: pointer;
+}
+
+.filtro-opcao input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  accent-color: var(--acento);
+}
+
+.filtro-nota {
+  font-size: 13px;
+}
+
+.filtro-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--acento);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.filtro-resumo {
+  margin: 0 0 10px;
+  color: var(--apoio);
+  font-size: 14px;
+}
+
 .indicadores {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));

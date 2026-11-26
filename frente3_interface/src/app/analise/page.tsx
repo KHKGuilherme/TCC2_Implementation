@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState, type JSX } from "react";
 
 import Arvore from "@/components/Arvore";
 import FormularioAnalise from "@/components/FormularioAnalise";
 import Medidor from "@/components/Medidor";
 import PainelArquivo from "@/components/PainelArquivo";
 import Progresso from "@/components/Progresso";
-import { buscarAnalise, type Analise, type Resultado } from "@/lib/api";
+import { buscarAnalise, type Analise, type ArquivoAnalisado, type Resultado } from "@/lib/api";
 import { filtrar, montarArvore, nivel, pastasAte, porcento, type Ordem } from "@/lib/arvore";
 
 const INTERVALO_DE_CONSULTA = 1000;
@@ -20,6 +20,18 @@ const numero = (valor: number, casas = 1) =>
 const inteiro = (valor: number) => valor.toLocaleString("pt-BR");
 
 const dataBrasileira = (iso: string) => iso.split("-").reverse().join("/");
+
+function lerPorcento(texto: string, padrao: number, minimo: number, maximo: number): number {
+  const limpo = texto.trim().replace(",", ".");
+  if (limpo === "") return padrao;
+  const valor = Number(limpo);
+  if (!Number.isFinite(valor)) return padrao;
+  return Math.min(maximo, Math.max(minimo, valor));
+}
+
+function textoDoPorcento(fracao: number): string {
+  return String(Math.round(fracao * 100));
+}
 
 export default function PaginaAnalise() {
   return (
@@ -97,26 +109,57 @@ function Consulta() {
   return <Resultados resultado={analise.resultado} />;
 }
 
-function Distribuicao({ contagens }: { contagens: number[] }) {
+interface PropsDistribuicao {
+  contagens: number[];
+  de: number;
+  ate: number;
+  escolher: (inicio: number, fim: number) => void;
+}
+
+function Distribuicao({ contagens, de, ate, escolher }: PropsDistribuicao): JSX.Element {
   const maior = Math.max(1, ...contagens);
 
   return (
-    <div className="distribuicao" role="img" aria-label="Distribuição das chances por arquivo">
-      {contagens.map((quantos, i) => (
-        <div key={i} className="distribuicao-coluna" title={`${quantos} arquivo(s) entre ${i * 10}% e ${i * 10 + 10}%`}>
-          <span className="distribuicao-numero">{quantos > 0 ? quantos : ""}</span>
-          <span className="distribuicao-barra" style={{ height: `${Math.max(2, (64 * quantos) / maior)}px` }} />
-          <span className="distribuicao-faixa">{i * 10}%</span>
-        </div>
-      ))}
+    <div className="distribuicao" role="group" aria-label="Distribuição das chances por arquivo. Clique numa faixa para filtrar.">
+      {contagens.map((quantos, i) => {
+        const inicio = i * 10;
+        const fim = inicio + 10;
+        const dentro = fim > de && inicio < ate;
+        return (
+          <button
+            key={inicio}
+            type="button"
+            className={`distribuicao-coluna${dentro ? "" : " fora"}`}
+            title={`${quantos} arquivo(s) entre ${inicio}% e ${fim}%. Clique para mostrar só esta faixa.`}
+            aria-label={`Mostrar os ${quantos} arquivo(s) entre ${inicio}% e ${fim}%`}
+            onClick={() => escolher(inicio, fim)}
+          >
+            <span className="distribuicao-numero">{quantos > 0 ? quantos : ""}</span>
+            <span className="distribuicao-barra" style={{ height: `${Math.max(2, (64 * quantos) / maior)}px` }} />
+            <span className="distribuicao-faixa">{inicio}%</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
 
-function Resultados({ resultado }: { resultado: Resultado }) {
-  const limiar = resultado.modelo.limiar;
+function Resultados({ resultado }: { resultado: Resultado }): JSX.Element {
+  const limiarModelo = resultado.modelo.limiar;
   const { resumo } = resultado;
   const validacao = resultado.modelo.validacao;
+
+  const [usarLimiarManual, setUsarLimiarManual] = useState(false);
+  const [textoLimiar, setTextoLimiar] = useState(() => textoDoPorcento(limiarModelo));
+  const limiar = usarLimiarManual ? lerPorcento(textoLimiar, limiarModelo * 100, 1, 99) / 100 : limiarModelo;
+
+  const [textoDe, setTextoDe] = useState("0");
+  const [textoAte, setTextoAte] = useState("100");
+  const lidoDe = lerPorcento(textoDe, 0, 0, 100);
+  const lidoAte = lerPorcento(textoAte, 100, 0, 100);
+  const de = Math.min(lidoDe, lidoAte);
+  const ate = Math.max(lidoDe, lidoAte);
+  const faixaAtiva = de > 0 || ate < 100;
 
   const arvoreCompleta = useMemo(() => montarArvore(resultado.arquivos, limiar), [resultado, limiar]);
   const ranking = useMemo(() => [...resultado.arquivos].sort((a, b) => a.posicao - b.posicao), [resultado]);
@@ -124,19 +167,49 @@ function Resultados({ resultado }: { resultado: Resultado }) {
   const [selecionado, setSelecionado] = useState<string | null>(ranking[0]?.caminho ?? null);
   const [ordem, setOrdem] = useState<Ordem>("risco");
   const [busca, setBusca] = useState("");
+  const termo = busca.trim().toLowerCase();
+  const filtroAtivo = termo !== "" || faixaAtiva;
 
   const [abertas, setAbertas] = useState<Set<string>>(
     () => new Set(ranking[0] ? pastasAte(arvoreCompleta, ranking[0].caminho) : []),
   );
 
+  const aceitar = useMemo(
+    () =>
+      (a: ArquivoAnalisado): boolean => {
+        const chance = 100 * a.probabilidade;
+        return (termo === "" || a.caminho.toLowerCase().includes(termo)) && chance >= de && chance <= ate;
+      },
+    [termo, de, ate],
+  );
+
   const arvore = useMemo(() => {
-    const termo = busca.trim().toLowerCase();
-    if (!termo) return arvoreCompleta;
-    return filtrar(arvoreCompleta, (a) => a.caminho.toLowerCase().includes(termo)) ?? { ...arvoreCompleta, filhos: [] };
-  }, [arvoreCompleta, busca]);
+    if (!filtroAtivo) return arvoreCompleta;
+    return filtrar(arvoreCompleta, aceitar) ?? { ...arvoreCompleta, filhos: [] };
+  }, [arvoreCompleta, aceitar, filtroAtivo]);
+
+  const rankingVisivel = useMemo(() => ranking.filter(aceitar), [ranking, aceitar]);
+
+  const acimaDoLimiar = usarLimiarManual
+    ? resultado.arquivos.filter((a) => a.probabilidade >= limiar).length
+    : resumo.risco_alto;
+  const porcentagemAcima = usarLimiarManual
+    ? (100 * acimaDoLimiar) / Math.max(1, resumo.avaliados)
+    : resumo.porcentagem_acima_do_limiar;
+
+  function escolherFaixa(inicio: number, fim: number): void {
+    setTextoDe(String(inicio));
+    setTextoAte(String(fim));
+  }
+
+  function limparFiltros(): void {
+    setTextoDe("0");
+    setTextoAte("100");
+    setBusca("");
+  }
 
   const abertasEfetivas = useMemo(() => {
-    if (!busca.trim()) return abertas;
+    if (!filtroAtivo) return abertas;
     const todas = new Set<string>();
     const juntar = (no: typeof arvore) => {
       if (no.tipo === "pasta") {
@@ -146,7 +219,7 @@ function Resultados({ resultado }: { resultado: Resultado }) {
     };
     juntar(arvore);
     return todas;
-  }, [abertas, arvore, busca]);
+  }, [abertas, arvore, filtroAtivo]);
 
   function alternar(caminho: string) {
     setAbertas((atual) => {
@@ -201,7 +274,7 @@ function Resultados({ resultado }: { resultado: Resultado }) {
               `, pelo erro médio de ${numero(validacao.erro_porcentagem_pp)} pontos percentuais em ${validacao.repositorios} projetos nunca vistos`}
             .
           </p>
-          <Distribuicao contagens={resumo.distribuicao} />
+          <Distribuicao contagens={resumo.distribuicao} de={de} ate={ate} escolher={escolherFaixa} />
         </div>
       </section>
 
@@ -218,9 +291,12 @@ function Resultados({ resultado }: { resultado: Resultado }) {
           <dd>{inteiro(resumo.avaliados)}</dd>
         </div>
         <div>
-          <dt>Acima do limiar de {porcento(limiar, 0)}</dt>
+          <dt>
+            Acima do limiar de {porcento(limiar, 0)}
+            {usarLimiarManual && " (manual)"}
+          </dt>
           <dd>
-            {inteiro(resumo.risco_alto)} ({numero(resumo.porcentagem_acima_do_limiar)}%)
+            {inteiro(acimaDoLimiar)} ({numero(porcentagemAcima)}%)
           </dd>
         </div>
         <div>
@@ -253,6 +329,89 @@ function Resultados({ resultado }: { resultado: Resultado }) {
             </div>
           </div>
 
+          <div className="filtros">
+            <fieldset className="filtro">
+              <legend>Chance do arquivo</legend>
+              <label htmlFor="faixa-de">de</label>
+              <input
+                id="faixa-de"
+                className="campo-numero"
+                type="number"
+                inputMode="decimal"
+                min={0}
+                max={100}
+                step={1}
+                value={textoDe}
+                onChange={(e) => setTextoDe(e.target.value)}
+              />
+              <label htmlFor="faixa-ate">% até</label>
+              <input
+                id="faixa-ate"
+                className="campo-numero"
+                type="number"
+                inputMode="decimal"
+                min={0}
+                max={100}
+                step={1}
+                value={textoAte}
+                onChange={(e) => setTextoAte(e.target.value)}
+              />
+              <span>%</span>
+            </fieldset>
+
+            <fieldset className="filtro">
+              <legend>Limiar de risco alto</legend>
+              <label className="filtro-opcao" htmlFor="limiar-manual">
+                <input
+                  id="limiar-manual"
+                  type="checkbox"
+                  checked={usarLimiarManual}
+                  onChange={(e) => setUsarLimiarManual(e.target.checked)}
+                />
+                definir manualmente
+              </label>
+              {usarLimiarManual ? (
+                <>
+                  <input
+                    id="limiar-valor"
+                    className="campo-numero"
+                    type="number"
+                    inputMode="decimal"
+                    min={1}
+                    max={99}
+                    step={1}
+                    value={textoLimiar}
+                    onChange={(e) => setTextoLimiar(e.target.value)}
+                    aria-label="Limiar de risco alto, em porcentagem"
+                  />
+                  <span>%</span>
+                  <button type="button" className="filtro-link" onClick={() => setTextoLimiar(textoDoPorcento(limiarModelo))}>
+                    voltar a {porcento(limiarModelo, 0)}
+                  </button>
+                </>
+              ) : (
+                <span className="filtro-nota">modelo: {porcento(limiarModelo, 0)}, maior F1 na validação</span>
+              )}
+            </fieldset>
+          </div>
+
+          {filtroAtivo && (
+            <p className="filtro-resumo">
+              {inteiro(rankingVisivel.length)} de {inteiro(resultado.arquivos.length)} arquivos
+              {faixaAtiva && ` com chance entre ${de}% e ${ate}%`}
+              {termo !== "" && ` contendo "${busca.trim()}"`}.{" "}
+              <button type="button" className="filtro-link" onClick={limparFiltros}>
+                limpar filtros
+              </button>
+            </p>
+          )}
+
+          {usarLimiarManual && resultado.lista_cortada && (
+            <p className="texto-apoio">
+              Com o limiar manual, a contagem considera só os {inteiro(resultado.arquivos.length)} arquivos da lista.
+            </p>
+          )}
+
           <p className="legenda">
             <span>
               <i className="fundo-forte-alto" /> alta, a partir de {porcento(limiar, 0)}
@@ -281,12 +440,13 @@ function Resultados({ resultado }: { resultado: Resultado }) {
         </section>
 
         <div className="coluna-lateral">
-          <PainelArquivo arquivo={arquivoSelecionado} resultado={resultado} />
+          <PainelArquivo arquivo={arquivoSelecionado} resultado={resultado} limiar={limiar} />
 
           <section className="bloco">
-            <h2>Maiores chances</h2>
+            <h2>Maiores chances{filtroAtivo && " no filtro"}</h2>
+            {rankingVisivel.length === 0 && <p className="texto-apoio">Nenhum arquivo corresponde ao filtro.</p>}
             <ol className="ranking">
-              {ranking.slice(0, 15).map((a) => (
+              {rankingVisivel.slice(0, 15).map((a) => (
                 <li key={a.caminho}>
                   <button
                     type="button"

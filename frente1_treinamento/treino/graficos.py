@@ -252,6 +252,81 @@ def grafico_importancia() -> None:
     salvar(figura, "09_importancia.png")
 
 
+def grafico_confusao(resumo: dict) -> None:
+    limiares = resumo["limiares"]
+    paineis = (("matriz_f1", "faixa_f1", "Limiar de maior F1"),
+               ("matriz_precisao", "faixa_precisao", f"Limiar de precisão ≥ {config.PRECISAO_MINIMA:.0%}"))
+    figura, eixos = plt.subplots(1, 2, figsize=(11, 4.6))
+    for eixo, (chave, faixa, titulo) in zip(eixos, paineis):
+        m = limiares[chave]
+        celulas = np.array([[m["vp"], m["fn"]], [m["fp"], m["vn"]]])
+        por_linha = celulas / celulas.sum(axis=1, keepdims=True)
+        eixo.imshow(por_linha, cmap="Blues", vmin=0, vmax=1)
+        nomes = [["verdadeiro positivo", "falso negativo"], ["falso positivo", "verdadeiro negativo"]]
+        for i in range(2):
+            for j in range(2):
+                cor = "white" if por_linha[i, j] > 0.55 else "#111827"
+                eixo.text(j, i - 0.18, f"{celulas[i, j]:,}".replace(",", "."), ha="center",
+                          va="center", fontsize=15, fontweight="bold", color=cor)
+                eixo.text(j, i + 0.08, f"{por_linha[i, j]:.1%} da linha".replace(".", ","),
+                          ha="center", va="center", fontsize=9, color=cor)
+                eixo.text(j, i + 0.30, nomes[i][j], ha="center", va="center", fontsize=8.5, color=cor)
+        eixo.set_xticks([0, 1], ["marcado como risco alto", "não marcado"])
+        eixo.set_yticks([0, 1], ["com defeito latente", "sem defeito"])
+        eixo.set_xlabel("previsão do modelo")
+        eixo.set_ylabel("realidade")
+        eixo.grid(False)
+        precisao = m["vp"] / max(1, m["vp"] + m["fp"])
+        revocacao = m["vp"] / max(1, m["vp"] + m["fn"])
+        a, b = limiares[faixa]
+        eixo.set_title(f"{titulo} ({a:.2f} a {b:.2f})\nprecisão {precisao:.1%} · revocação "
+                       f"{revocacao:.1%}".replace(".", ","), fontsize=10)
+    figura.suptitle(f"Matriz de confusão em repositórios nunca vistos "
+                    f"({resumo['retratos_avaliados']:,} retratos)".replace(",", "."), fontsize=11)
+    salvar(figura, "10_matriz_confusao.png")
+
+
+def grafico_roc(resumo: dict) -> None:
+    roc = resumo["roc"]
+    final = f"p_{resumo['variante_final']}"
+    cores = {final: AZUL, "commits_365": VERDE, "churn": LARANJA, "linhas_estimadas": CINZA,
+             "aleatorio": "#9ca3af"}
+    figura, (a, b) = plt.subplots(1, 2, figsize=(11, 4.8))
+    ordem = sorted(roc["agregado"], key=lambda m: roc["agregado"][m]["auc"], reverse=True)
+    for metodo in ordem:
+        curva = roc["agregado"][metodo]
+        grosso = metodo == final
+        a.plot(curva["fpr"], curva["tpr"], color=cores.get(metodo, CINZA), lw=2.2 if grosso else 1.2,
+               ls=":" if metodo == "aleatorio" else "-",
+               label=f"{NOMES.get(metodo, metodo)} (AUC {curva['auc']:.3f})".replace(".", ","))
+    for chave, marcador, nome in (("matriz_f1", "o", "limiar de maior F1"),
+                                  ("matriz_precisao", "s", "limiar de precisão ≥ 50%")):
+        m = resumo["limiares"][chave]
+        a.plot(m["fp"] / (m["fp"] + m["vn"]), m["vp"] / (m["vp"] + m["fn"]), marcador,
+               color="#111827", ms=7, label=nome)
+    a.set_xlabel("taxa de falsos positivos (arquivos limpos marcados)")
+    a.set_ylabel("taxa de verdadeiros positivos (revocação)")
+    a.set_title("Curva ROC, todos os retratos juntos")
+    a.legend(fontsize=7.5, loc="lower right")
+    a.set_xlim(0, 1)
+    a.set_ylim(0, 1)
+    aucs = []
+    for nome, curva in roc["por_repositorio"].items():
+        b.plot(curva["fpr"], curva["tpr"], color=AZUL, lw=0.9, alpha=0.45)
+        aucs.append(curva["auc"])
+    b.plot([0, 1], [0, 1], color="#9ca3af", ls=":", lw=1.2)
+    aucs = np.array(aucs)
+    b.text(0.97, 0.05, f"AUC por repositório\nmediana {np.median(aucs):.3f}\n"
+           f"de {aucs.min():.3f} a {aucs.max():.3f}".replace(".", ","),
+           ha="right", va="bottom", fontsize=9, bbox=dict(facecolor="white", edgecolor="#e5e7eb"))
+    b.set_xlabel("taxa de falsos positivos")
+    b.set_ylabel("taxa de verdadeiros positivos")
+    b.set_title(f"Uma curva por repositório nunca visto ({len(aucs)})")
+    b.set_xlim(0, 1)
+    b.set_ylim(0, 1)
+    salvar(figura, "11_curva_roc.png")
+
+
 def tabela_html(linhas: list[dict], colunas: list[tuple[str, str, str]]) -> str:
     partes = ["<table><tr>" + "".join(f"<th>{html.escape(t)}</th>" for _, t, _ in colunas) + "</tr>"]
     for linha in linhas:
@@ -348,6 +423,20 @@ def escrever_relatorio(resumo: dict, rotulo: dict) -> None:
          porcentagem + "<img src='08_porcentagem_por_repositorio.png' alt='por repositório'>"),
         ("8. O que o modelo usa", "09_importancia.png",
          "Importância por permutação no modelo final, treinado em todos os repositórios.", ""),
+        ("9. Matriz de confusão", "10_matriz_confusao.png",
+         f"Contagem de retratos por previsão e realidade, com o limiar de cada repositório "
+         f"escolhido nos outros. As linhas somam 100%: a de cima mostra quanto dos arquivos com "
+         f"defeito o modelo pega (revocação), e a de baixo quantos arquivos limpos ele marca por "
+         f"engano. Com taxa base de {resumo['taxa_base']:.1%}, a precisão do limiar de maior F1 "
+         f"({f1['precisao']:.1%}) é {f1['precisao'] / resumo['taxa_base']:.1f} vezes a de marcar "
+         f"ao acaso.", ""),
+        ("10. Curva ROC", "11_curva_roc.png",
+         f"À esquerda, todos os retratos juntos: AUC agregado de "
+         f"{resumo['roc']['agregado'][final]['auc']:.3f} para o modelo. Os pontos marcam os dois "
+         f"limiares da matriz de confusão. À direita, uma curva por repositório deixado de fora. "
+         f"O número principal do trabalho continua sendo o AUC mediano por repositório da seção "
+         f"3, calculado retrato a retrato, que não mistura repositórios com taxas de defeito "
+         f"diferentes.", ""),
     ]
     corpo = "".join(
         f"<section><h2>{html.escape(titulo)}</h2><p>{texto}</p>"
@@ -381,6 +470,8 @@ def principal(argumentos: list[str]) -> None:
     grafico_limiar(resumo)
     grafico_porcentagem(resumo)
     grafico_importancia()
+    grafico_confusao(resumo)
+    grafico_roc(resumo)
     escrever_relatorio(resumo, rotulo)
     (SAIDA / "rotulo.json").write_text(json.dumps(rotulo, indent=1), encoding="utf-8")
     print("gráficos e relatório gravados em", SAIDA)

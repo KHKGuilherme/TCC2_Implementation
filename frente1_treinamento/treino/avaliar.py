@@ -4,7 +4,7 @@ import sys
 import numpy as np
 import pandas as pd
 from scipy.stats import spearmanr, wilcoxon
-from sklearn.metrics import average_precision_score, brier_score_loss, roc_auc_score
+from sklearn.metrics import average_precision_score, brier_score_loss, roc_auc_score, roc_curve
 
 from treino import config
 from treino import modelo
@@ -112,6 +112,21 @@ def medir_limiar(y: np.ndarray, marcado: np.ndarray) -> dict:
             "marcados": float(marcado.mean()), "base": float(y.mean())}
 
 
+def matriz_de_confusao(y: np.ndarray, marcado: np.ndarray) -> dict:
+    y = y.astype(int)
+    marcado = marcado.astype(bool)
+    return {"vp": int((marcado & (y == 1)).sum()), "fp": int((marcado & (y == 0)).sum()),
+            "fn": int((~marcado & (y == 1)).sum()), "vn": int((~marcado & (y == 0)).sum())}
+
+
+def curva_roc(y: np.ndarray, p: np.ndarray, pontos: int = 400) -> dict:
+    fpr, tpr, _ = roc_curve(y.astype(int), p)
+    grade = np.linspace(0, 1, pontos + 1)
+    indice = np.searchsorted(fpr, grade, side="right") - 1
+    return {"auc": float(roc_auc_score(y.astype(int), p)),
+            "fpr": np.round(grade, 4).tolist(), "tpr": np.round(tpr[indice], 4).tolist()}
+
+
 def porcentagens(dados: pd.DataFrame, nota: str, rotulo: str) -> pd.DataFrame:
     dados = dados.copy()
     limiares = {}
@@ -196,6 +211,18 @@ def avaliar() -> dict:
                            float(tabela["limiar_precisao"].max())],
         "curva": [dict(limiar=float(l), **medir_limiar(y, base[f"{final}_{config.CALIBRACAO_FINAL}"].values >= l))
                   for l in LIMIARES],
+        "matriz_f1": matriz_de_confusao(y, marcados["marcado_f1"].values),
+        "matriz_precisao": matriz_de_confusao(y, marcados["marcado_precisao"].values),
+    }
+
+    chance_final = f"{final}_{config.CALIBRACAO_FINAL}"
+    roc = {
+        "agregado": {metodo: curva_roc(y, base[coluna].values) for metodo, coluna in
+                     ((final, chance_final), ("churn", "churn"),
+                      ("linhas_estimadas", "linhas_estimadas"), ("commits_365", "commits_365"),
+                      ("aleatorio", "aleatorio"))},
+        "por_repositorio": {nome: curva_roc(grupo[rotulo].values, grupo[chance_final].values)
+                            for nome, grupo in base.groupby("repositorio")},
     }
 
     horizontes = {}
@@ -230,7 +257,7 @@ def avaliar() -> dict:
         "taxa_base": float(y.mean()), "datas": [base["data"].min(), base["data"].max()],
         "comparacao": comparacao, "comparacao_ultimo_retrato": comparacao_ultimo,
         "calibracao": calibracao, "porcentagem": resumir_porcentagem(tabela),
-        "limiares": limiares, "horizontes": horizontes,
+        "limiares": limiares, "roc": roc, "horizontes": horizontes,
         "conserto_futuro_2023": {"repositorios": int(len(externo)),
                                  **{k: float(v) for k, v in externo.median().items()}},
     }
@@ -250,6 +277,8 @@ def mostrar(resumo: dict) -> None:
     print("\nPorcentagem do repositório (pontos percentuais)")
     print(pd.DataFrame(resumo["porcentagem"]).round(3).to_string(index=False))
     print("\nLimiares:", {k: v for k, v in resumo["limiares"].items() if k != "curva"})
+    print("\nAUC agregado (todos os retratos juntos):",
+          {k: round(v["auc"], 4) for k, v in resumo["roc"]["agregado"].items()})
     print("\nHorizontes:", json.dumps(resumo["horizontes"], indent=1))
     print("\nConserto futuro em 180 dias, retratos de 2023+:", resumo["conserto_futuro_2023"])
 
